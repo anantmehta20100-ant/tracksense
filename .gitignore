@@ -1,0 +1,46 @@
+data/synthetic/
+data/risk_model/
+model/risk_random_forest.joblib
+data/training_photos/**
+!data/training_photos/**/
+!data/training_photos/**/.gitkeep
+!data/training_photos/SOURCING_NOTES.md
+model/checkpoints/
+venv/
+__pycache__/
+ml/data.unified.resolved.yaml
+ml/data.train.resolved.yaml
+
+# Multiscene synthetic YOLO augmentation -- large generated artifacts (Phase 3-9).
+# Regenerate with: create_object_crop_bank.py -> generate_multiscene_yolo_data.py
+# -> build_multiscene_dataset.py -> package_multiscene_kaggle.py (all seed 42).
+data/object_crop_bank/
+data/training_8class_multiscene/
+tracksense_multiscene_kaggle.zip
+reports/multiscene_samples/
+reports/multiscene_stress_samples/
+reports/multiscene_detection_eval/
+
+# ---------------------------------------------------------------------------
+# Source-only repository (public push): exclude datasets, generated artifacts,
+# model weights, nested/duplicate projects, and local tooling/agent config.
+# ---------------------------------------------------------------------------
+# Datasets & generated outputs (regenerated locally from ml/ scripts; not source).
+data/
+reports/
+
+# Model weights / large binaries -- never commit (GitHub rejects >100MB anyway).
+*.pt
+*.joblib
+*.zip
+
+# Nested / duplicate project directories (AllergenDetection has its own .git).
+AllergenDetection/
+tracksensegithub/
+
+# Local tooling / editor / agent config.
+.claude/
+.vscode/
+.idea/
+.agents/
+.codex/

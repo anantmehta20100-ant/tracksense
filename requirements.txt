@@ -1,0 +1,12 @@
+opencv-python
+ultralytics
+mediapipe
+torch
+scikit-learn
+joblib
+pandas
+numpy
+matplotlib
+streamlit
+flask
+pillow

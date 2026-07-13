@@ -1,0 +1,19 @@
+# Canonical TrackSense YOLO class order for the final 9-class detector.
+# Keep this order synchronized with config/allergens.py OBJECT_CLASSES.
+#
+# Path is relative to wherever this yaml file is referenced from during training.
+path: ../data/training_photos/unified
+train: train/images
+val: valid/images
+test: test/images
+
+names:
+  0: nut_butter_jar
+  1: whole_nuts
+  2: hand
+  3: cutlery
+  4: chopping_board
+  5: plate
+  6: bowl
+  7: counter
+  8: bread

@@ -1,0 +1,28 @@
+# TrackSense temporary 8-CLASS YOLO training schema.
+#
+# `counter` (canonical id 7) is EXCLUDED because no counter dataset exists yet.
+# `bread` is canonical id 8 but model-local id 7 -- the explicit, authoritative
+# mapping lives in ml/class_schema.py (MODEL_LOCAL_TO_CANONICAL). Runtime code
+# MUST convert model output ids back to canonical ids via
+# ml.class_schema.model_to_canonical() before touching config/allergens.py.
+#
+# The canonical 9-class project schema in config/allergens.py is unchanged.
+#
+# ml/train_yolo.py regenerates an absolute-path copy of this file at runtime
+# (ml/data.train.resolved.yaml, gitignored) so ultralytics cannot mis-resolve
+# the relative path against its own datasets_dir.
+
+path: ../data/training_8class_balanced
+train: train/images
+val: valid/images
+test: test/images
+
+names:
+  0: nut_butter_jar
+  1: whole_nuts
+  2: hand
+  3: cutlery
+  4: chopping_board
+  5: plate
+  6: bowl
+  7: bread

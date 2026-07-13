@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrackSense — Live Camera (YOLO)</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    .cam-wrap { max-width: 980px; }
+    .cam-stage {
+      background: #000; border: 1px solid var(--line); border-radius: 14px;
+      overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 380px;
+    }
+    .cam-stage img { width: 100%; display: block; }
+    .cam-msg { color: var(--muted); padding: 48px 24px; text-align: center; }
+    .cam-actions { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap cam-wrap">
+    <header class="hero panel">
+      <div class="hero-top">
+        <div>
+          <h1 class="brand">TrackSense — Live Camera</h1>
+          <p class="tagline">Server-side webcam &times; multiscene YOLO (8-class) object detection.</p>
+        </div>
+        <span class="pill pill-running">live</span>
+      </div>
+      <p class="lede">
+        Real-time detection on your webcam using
+        <span class="mono">tracksense_8class_multiscene_best.pt</span>.
+        <strong>Close this tab to stop the camera.</strong>
+      </p>
+    </header>
+
+    <div class="cam-actions">
+      <a class="btn btn-primary" href="/">&larr; Back to dashboard</a>
+      <button class="btn" id="reload">Restart stream</button>
+      <span class="muted small">detects: nut_butter_jar · whole_nuts · hand · cutlery · chopping_board · plate · bowl · bread</span>
+    </div>
+
+    <section class="panel">
+      <div class="cam-stage">
+        <img id="cam" alt="live annotated camera stream" src="/api/camera/stream" />
+        <div class="cam-msg" id="cam-error" hidden>
+          Camera unavailable — it may already be streaming in another tab or in use by another app.
+          Close other users and press <strong>Restart stream</strong>.
+        </div>
+      </div>
+    </section>
+
+    <section class="panel verify">
+      <div class="sectitle">Verification &amp; Limitations</div>
+      <div class="verify-flag"><span class="badge b-verify">physical_verification: false</span></div>
+      <ul class="limitations">
+        <li>Prototype relative-risk estimate. Not a biochemical allergen measurement.</li>
+        <li>Object detection only — a detected object is a proxy for possible contact, not proof of
+          allergen presence.</li>
+        <li>Live detections are a visual detection demo and are not physically verified.</li>
+      </ul>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      var img = document.getElementById("cam");
+      var err = document.getElementById("cam-error");
+      img.addEventListener("error", function () { img.style.display = "none"; err.hidden = false; });
+      document.getElementById("reload").onclick = function () {
+        err.hidden = true; img.style.display = "";
+        img.src = "/api/camera/stream?t=" + Date.now();
+      };
+    })();
+  </script>
+</body>
+</html>

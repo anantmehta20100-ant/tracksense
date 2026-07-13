@@ -1,0 +1,30 @@
+# TrackSense 8-CLASS YOLO training schema -- MULTISCENE retraining dataset (LOCAL).
+#
+# Same 8 model-local classes as data.8class.yaml. The ONLY difference is the
+# dataset root: this points at data/training_8class_multiscene, whose TRAIN split
+# is the original single-object balanced train PLUS synthetic multi-object scenes
+# (ml/generate_multiscene_yolo_data.py) that teach class co-occurrence. VALID and
+# TEST are the original balanced splits, unchanged, so metrics stay comparable.
+#
+# `counter` (canonical id 7) is EXCLUDED. `bread` is model-local id 7 (canonical
+# 8); the authoritative mapping lives in ml/class_schema.py. Runtime code MUST
+# convert model output ids back to canonical ids via model_to_canonical() before
+# touching config/allergens.py. The canonical 9-class project schema is unchanged.
+#
+# The held-out data/training_8class_multiscene/stress_test set is NOT referenced
+# here on purpose -- it is an evaluation-only jar+cutlery occlusion set.
+
+path: ../data/training_8class_multiscene
+train: train/images
+val: valid/images
+test: test/images
+
+names:
+  0: nut_butter_jar
+  1: whole_nuts
+  2: hand
+  3: cutlery
+  4: chopping_board
+  5: plate
+  6: bowl
+  7: bread

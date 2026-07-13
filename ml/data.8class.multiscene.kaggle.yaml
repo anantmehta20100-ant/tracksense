@@ -1,0 +1,24 @@
+# TrackSense 8-CLASS YOLO MULTISCENE retraining schema for KAGGLE.
+# Extract the package under /kaggle/working/tracksense so this path resolves.
+#
+# TRAIN = original balanced single-object train + synthetic multi-object scenes
+# (teaches nut_butter_jar + cutlery and other classes to co-occur in one frame).
+# VALID / TEST = original balanced splits, unchanged (metrics stay comparable).
+#
+# `counter` (canonical id 7) is excluded; `bread` is model-local id 7 and maps to
+# canonical id 8 in ml/class_schema.py. Do not add `counter`.
+
+path: /kaggle/working/tracksense/data/training_8class_multiscene
+train: train/images
+val: valid/images
+test: test/images
+
+names:
+  0: nut_butter_jar
+  1: whole_nuts
+  2: hand
+  3: cutlery
+  4: chopping_board
+  5: plate
+  6: bowl
+  7: bread

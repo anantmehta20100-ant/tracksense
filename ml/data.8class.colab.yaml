@@ -1,0 +1,17 @@
+# TrackSense 8-class YOLO training config for extraction at /content/tracksense
+# on Google Colab. Counter (canonical id 7) is intentionally excluded; bread
+# is model-local id 7 and maps to canonical id 8 in ml/class_schema.py.
+path: /content/tracksense/data/training_8class_balanced
+train: train/images
+val: valid/images
+test: test/images
+
+names:
+  0: nut_butter_jar
+  1: whole_nuts
+  2: hand
+  3: cutlery
+  4: chopping_board
+  5: plate
+  6: bowl
+  7: bread

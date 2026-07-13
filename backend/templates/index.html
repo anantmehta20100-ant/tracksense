@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrackSense — See the contact. Trace the risk. Prevent the exposure.</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- ===================== HERO ===================== -->
+    <header class="hero panel">
+      <div class="hero-top">
+        <div>
+          <h1 class="brand">TrackSense</h1>
+          <p class="tagline">See the contact. Trace the risk. Prevent the exposure.</p>
+        </div>
+        <div class="hero-status">
+          <span id="source-label" class="pill pill-idle">Source: mock</span>
+          <span id="status-pill" class="pill pill-idle">idle</span>
+        </div>
+      </div>
+
+      <p class="lede">
+        TrackSense predicts how <strong>relative allergen cross-contact risk</strong> can
+        propagate through a kitchen over time.
+      </p>
+
+      <div class="hero-chain" id="hero-chain">
+        <div class="chain-node" data-class="nut_butter_jar">
+          <span class="node-name">nut_butter_jar</span>
+          <span class="node-badge badge LOW" data-badge>—</span>
+        </div>
+        <span class="chain-arrow">&rarr;</span>
+        <div class="chain-node" data-class="cutlery">
+          <span class="node-name">cutlery</span>
+          <span class="node-badge badge LOW" data-badge>—</span>
+        </div>
+        <span class="chain-arrow">&rarr;</span>
+        <div class="chain-node" data-class="bread">
+          <span class="node-name">bread</span>
+          <span class="node-badge badge LOW" data-badge>—</span>
+        </div>
+        <span class="chain-arrow">&rarr;</span>
+        <div class="chain-node" data-class="plate">
+          <span class="node-name">plate</span>
+          <span class="node-badge badge LOW" data-badge>—</span>
+        </div>
+      </div>
+
+      <p class="pitch">
+        Existing tools ask what allergens are in the food.
+        <strong>TrackSense asks where the risk travelled next.</strong>
+      </p>
+    </header>
+
+    <!-- ===================== CONTROLS ===================== -->
+    <section class="panel controls">
+      <div class="sectitle">Demo Controls</div>
+      <div class="controls-row">
+        <button id="demo-start" class="btn btn-primary">Start Mock Demo</button>
+        <button id="demo-reset" class="btn">Reset Mock Demo</button>
+        <button id="live-start" class="btn">Start Live YOLO</button>
+        <button id="live-stop" class="btn" disabled>Stop Live YOLO</button>
+        <button id="demo-refresh" class="btn">Refresh Snapshot</button>
+        <a class="btn" href="/camera" target="_blank" rel="noopener">Live camera ↗</a>
+        <div class="progress">
+          <div class="pbar"><i id="progress-bar"></i></div>
+          <span id="progress-text" class="muted mono">0 / 0</span>
+        </div>
+      </div>
+      <div id="live-warning" class="warn-line" hidden>
+        ⚠ Live YOLO mode is an engineering smoke test. It has not been physically validated.
+      </div>
+      <div id="controls-error" class="error-line" hidden></div>
+    </section>
+
+    <!-- ===================== MAIN GRID ===================== -->
+    <div class="grid">
+      <div class="col">
+        <section class="panel">
+          <div class="sectitle">Object Risk States</div>
+          <div id="risk-cards" class="cards">
+            <p class="muted empty">Start the demo to populate risk states.</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="sectitle">Contact Timeline</div>
+          <div id="contact-timeline" class="timeline">
+            <p class="muted empty">No contact events yet.</p>
+          </div>
+        </section>
+      </div>
+
+      <div class="col">
+        <section class="panel">
+          <div class="sectitle">Explanation — why is the plate at risk?</div>
+          <div id="explanation-panel">
+            <p class="muted empty">Run the demo to trace the propagation chain.</p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="sectitle">Alerts</div>
+          <p class="muted small">Prototype <strong>relative-risk</strong> alerts — not medical or
+            biochemical measurements.</p>
+          <div id="alerts-panel">
+            <p class="muted empty">No high-risk alerts yet.</p>
+          </div>
+        </section>
+
+        <section class="panel verify">
+          <div class="sectitle">Verification &amp; Limitations</div>
+          <div class="verify-flag">
+            <span class="badge b-verify">physical_verification: false</span>
+          </div>
+          <ul class="limitations">
+            <li>Prototype relative-risk estimate. Not a biochemical allergen measurement.</li>
+            <li>Current dashboard demo may use mock detections unless live YOLO mode is explicitly enabled.</li>
+            <li>Object detection only — a detected object is a proxy for possible contact, not proof
+              of allergen presence.</li>
+          </ul>
+          <p class="muted small mono" id="verify-source">source: —</p>
+        </section>
+      </div>
+    </div>
+
+    <!-- ===================== YOLO SMOKE ===================== -->
+    <section class="panel">
+      <div class="sectitle">YOLO Still-Image Smoke Tests</div>
+      <p class="muted small">
+        Whether the recovered multiscene YOLO model can detect <strong>nut_butter_jar</strong> and
+        <strong>cutlery</strong> in real still images. Local files only — nothing is uploaded.
+      </p>
+      <div id="smoke-summary" class="smoke-summary">
+        <p class="muted empty">Loading smoke-test summary…</p>
+      </div>
+      <div id="smoke-gallery" class="gallery"></div>
+    </section>
+
+    <footer class="foot">
+      <strong>TrackSense</strong> — prototype relative-risk propagation demo.
+      Prototype relative-risk estimate. Not a biochemical allergen measurement.
+      No camera or internet required for this dashboard. All processing is local.
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

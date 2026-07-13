@@ -1,0 +1,102 @@
+{
+  "model_version": "risk-rf-1.0.0",
+  "model_type": "RandomForestClassifier",
+  "task": "relative cross-contact risk (LOW/MEDIUM/HIGH) -- synthetic development model",
+  "feature_order": [
+    "source_object",
+    "target_object",
+    "source_current_risk",
+    "target_previous_risk",
+    "is_source_allergen",
+    "contact_duration",
+    "bbox_overlap_ratio",
+    "normalized_distance",
+    "time_since_last_contact",
+    "source_contact_count",
+    "target_contact_count",
+    "propagation_depth",
+    "cleaning_detected",
+    "repeated_contact_count",
+    "seconds_since_source_exposure"
+  ],
+  "categorical_features": [
+    "source_object",
+    "target_object"
+  ],
+  "numeric_features": [
+    "source_current_risk",
+    "target_previous_risk",
+    "is_source_allergen",
+    "contact_duration",
+    "bbox_overlap_ratio",
+    "normalized_distance",
+    "time_since_last_contact",
+    "source_contact_count",
+    "target_contact_count",
+    "propagation_depth",
+    "cleaning_detected",
+    "repeated_contact_count",
+    "seconds_since_source_exposure"
+  ],
+  "object_categories": [
+    "nut_butter_jar",
+    "whole_nuts",
+    "hand",
+    "cutlery",
+    "chopping_board",
+    "plate",
+    "bowl",
+    "counter",
+    "bread",
+    "cleaning_supply"
+  ],
+  "class_labels": [
+    "LOW",
+    "MEDIUM",
+    "HIGH"
+  ],
+  "class_label_ids": {
+    "LOW": 0,
+    "MEDIUM": 1,
+    "HIGH": 2
+  },
+  "random_seed": 42,
+  "sklearn_version": "1.8.0",
+  "numpy_version": "2.4.3",
+  "pandas_version": "3.0.1",
+  "training_timestamp": "2026-07-10T14:17:20.618323+00:00",
+  "dataset_path": "data\\risk_model\\risk_events.csv",
+  "dataset_row_count": 24570,
+  "n_scenarios": 5000,
+  "split_fractions": {
+    "train": 0.7,
+    "val": 0.15,
+    "test": 0.15
+  },
+  "n_train_rows": 17193,
+  "n_val_rows": 3706,
+  "n_test_rows": 3671,
+  "n_train_scenarios": 3500,
+  "n_val_scenarios": 750,
+  "n_test_scenarios": 750,
+  "hyperparameters": {
+    "max_depth": 16,
+    "max_features": "sqrt",
+    "min_samples_leaf": 3,
+    "n_estimators": 300
+  },
+  "cv": {
+    "scoring": "f1_macro",
+    "n_splits": 3,
+    "best_cv_score": 0.7152128048566212,
+    "n_candidates": 12
+  },
+  "validation_macro_f1": 0.728455353791302,
+  "validation_balanced_accuracy": 0.7538782978621682,
+  "train_class_distribution": {
+    "LOW": 12055,
+    "MEDIUM": 2980,
+    "HIGH": 2158
+  },
+  "data_disclaimer": "Trained on SYNTHETIC development data. Outputs are relative cross-contact risk, not measured allergen concentration."
+}
