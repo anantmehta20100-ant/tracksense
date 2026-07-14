@@ -52,6 +52,7 @@
     <div class="ph-actions">
       <button class="btn btn-primary" id="start">Start camera</button>
       <button class="btn" id="flip" disabled>Flip camera</button>
+      <button class="btn btn-primary" id="sound">🔔 Sound</button>
       <button class="btn" id="reset" disabled>Reset contamination</button>
       <a class="btn btn-danger" href="/alert">⚠ Emergency</a>
       <a class="btn" href="/">&larr; Dashboard</a>
@@ -106,8 +107,42 @@
       var CAP_W = 480;
 
       var stream = null, running = false, busy = false, facing = "environment";
-      var lastCount = -1, frames = 0, lastFpsT = 0;
+      var lastCount = -1, alertedCount = 0, frames = 0, lastFpsT = 0;
       var INTRO = document.getElementById("contam-feed").innerHTML;
+
+      // ---- audio + vibration alerts (fire on new allergen / infection events) ----
+      // Web Audio must be unlocked inside a user gesture (Start / Sound tap). On
+      // iOS, navigator.vibrate is unsupported, so the phone beeps but does not buzz.
+      var soundOn = true, audioCtx = null;
+      var soundBtn = document.getElementById("sound");
+      function ensureAudio() {
+        try {
+          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          if (audioCtx.state === "suspended") audioCtx.resume();
+        } catch (e) { audioCtx = null; }
+      }
+      function beep(freq, startS, durS) {
+        if (!audioCtx) return;
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = "square"; o.frequency.value = freq;
+        o.connect(g); g.connect(audioCtx.destination);
+        var t = audioCtx.currentTime + startS;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + durS);
+        o.start(t); o.stop(t + durS + 0.03);
+      }
+      function fireAlert(kind) {
+        if (!soundOn) return;
+        ensureAudio();
+        if (kind === "infection") {                        // urgent triple + strong buzz
+          beep(880, 0, 0.16); beep(880, 0.22, 0.16); beep(660, 0.44, 0.24);
+          if (navigator.vibrate) navigator.vibrate([0, 150, 70, 150, 70, 220]);
+        } else {                                           // allergen "heads-up" two-tone
+          beep(660, 0, 0.18); beep(784, 0.20, 0.22);
+          if (navigator.vibrate) navigator.vibrate([0, 120, 60, 120]);
+        }
+      }
 
       function showMsg(text, isErr) {
         msg.innerHTML = text; msg.hidden = false;
@@ -137,6 +172,7 @@
         view.width = vw; view.height = vh;
         cap.width = CAP_W; cap.height = Math.round(CAP_W * vh / vw);
         running = true;
+        ensureAudio();                       // Start is a user gesture -> unlock beeps
         startBtn.textContent = "Stop camera";
         flipBtn.disabled = false; resetBtn.disabled = false;
         loop();
@@ -229,6 +265,13 @@
         });
         if (!seen.length && !infected.length) addChip("clean", "clean");
         var notes = state.notifications || [];
+        // Alert on genuinely new events (fire once each): infection > allergen.
+        if (running && notes.length > alertedCount) {
+          var fresh = notes.slice(alertedCount);
+          if (fresh.some(function (n) { return n.kind === "infection"; })) fireAlert("infection");
+          else if (fresh.some(function (n) { return n.kind === "allergen"; })) fireAlert("allergen");
+        }
+        alertedCount = notes.length;         // also resets when the tracker is cleared
         if (notes.length === lastCount) return;
         lastCount = notes.length;
         if (!notes.length) { feedEl.innerHTML = INTRO; return; }
@@ -247,10 +290,17 @@
       }
 
       startBtn.onclick = function () { running ? stop() : start(); };
+      soundBtn.onclick = function () {
+        soundOn = !soundOn;
+        soundBtn.textContent = soundOn ? "🔔 Sound" : "🔕 Muted";
+        soundBtn.classList.toggle("btn-primary", soundOn);
+        if (soundOn) { ensureAudio(); beep(784, 0, 0.12); }   // unlock + confirmation blip
+      };
       flipBtn.onclick = function () { facing = (facing === "environment") ? "user" : "environment"; if (running) start(); };
       resetBtn.onclick = function () {
         fetch("/api/phone/reset", { method: "POST" }).catch(function () {});
-        lastCount = -1; chipsEl.innerHTML = ""; feedEl.innerHTML = INTRO; statusEl.textContent = "Reset — monitoring…";
+        lastCount = -1; alertedCount = 0; chipsEl.innerHTML = ""; feedEl.innerHTML = INTRO;
+        statusEl.textContent = "Reset — monitoring…";
       };
     })();
   </script>
