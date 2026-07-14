@@ -30,11 +30,29 @@ class ContaminationRules(unittest.TestCase):
         newly = t.observe([(JAR, "cutlery")], frame_index=1, present_classes=[JAR, "cutlery"])
         self.assertEqual(newly, ["cutlery"])
         self.assertEqual(t.status("cutlery"), "infected")
-        self.assertEqual(len(t.notifications), 1)
-        note = t.notifications[0]
+        infections = [n for n in t.notifications if n["kind"] == "infection"]
+        self.assertEqual(len(infections), 1)
+        note = infections[0]
         self.assertEqual(note["item"], "cutlery")
         self.assertEqual(note["via_kind"], "source")
         self.assertIn("peanut butter", note["message"])
+
+    def test_allergen_detection_emits_one_notification(self):
+        t = ContaminationTracker()
+        # peanut butter appears in view (nothing touching yet)
+        t.observe([], frame_index=1, present_classes=[JAR, "plate"])
+        allergens = [n for n in t.notifications if n["kind"] == "allergen"]
+        self.assertEqual(len(allergens), 1)
+        self.assertEqual(allergens[0]["item"], JAR)
+        self.assertIn("Allergen detected", allergens[0]["message"])
+        self.assertEqual(t.state()["sources_seen"], [JAR])
+
+    def test_allergen_notification_not_duplicated(self):
+        t = ContaminationTracker()
+        t.observe([], frame_index=1, present_classes=[JAR])
+        t.observe([], frame_index=2, present_classes=[JAR])   # still in view next frame
+        allergens = [n for n in t.notifications if n["kind"] == "allergen"]
+        self.assertEqual(len(allergens), 1)
 
     def test_infected_item_propagates_to_next_item(self):
         t = ContaminationTracker()

@@ -43,8 +43,10 @@ class ContaminationTracker:
         )
         self.infected = set()        # class names that have been contaminated (sticky)
         self.sources_seen = set()    # source classes actually observed on camera
-        self.notifications = []      # chronological log, one entry per NEW infection
+        self.notifications = []      # chronological log: allergen-detected + infection events
         self.frame_index = 0
+        self.new_allergens = []      # sources first seen THIS frame (for the on-frame flash)
+        self.new_infections = []     # items infected THIS frame (for the on-frame flash)
 
     # -- queries -----------------------------------------------------------
     def is_carrier(self, class_name: str) -> bool:
@@ -61,19 +63,42 @@ class ContaminationTracker:
 
     # -- update ------------------------------------------------------------
     def observe(self, pairs, *, frame_index=0, timestamp=0.0, present_classes=None):
-        """Apply the infection rules for one frame.
+        """Apply the detection + infection rules for one frame.
 
         `pairs` is an iterable of (classA, classB) that are TOUCHING this frame.
-        Propagation is run to a fixed point so a fresh chain that lands in a
-        single frame (source -> A -> B) fully resolves. Appends one notification
-        per newly-infected class and returns the list of newly-infected names.
+        Emits two kinds of notification:
+          * "allergen"  -- once, the first time a source (peanut butter) is seen.
+          * "infection" -- once per newly-infected item; propagation runs to a
+            fixed point so a chain landing in a single frame fully resolves.
+        Returns the list of newly-infected class names (used for the on-frame flash).
         """
         self.frame_index = frame_index
-        for c in (present_classes or ()):
-            if c in self.source_classes:
-                self.sources_seen.add(c)
-
         edges = [(a, b) for a, b in pairs if a != b]  # ignore same-class double-detections
+
+        # Everything visible this frame: explicit detections + anything touching.
+        present = set(present_classes or ())
+        for a, b in edges:
+            present.add(a)
+            present.add(b)
+
+        # (1) Allergen-detected notification -- one per source, the first time it appears.
+        new_allergens = []
+        for c in sorted(present):
+            if c in self.source_classes and c not in self.sources_seen:
+                self.sources_seen.add(c)
+                new_allergens.append(c)
+                self.notifications.append({
+                    "kind": "allergen",
+                    "item": c,
+                    "via": None,
+                    "via_kind": "detection",
+                    "frame_index": frame_index,
+                    "timestamp": timestamp,
+                    "message": f"Allergen detected: {c} (the peanut butter)",
+                })
+        self.new_allergens = new_allergens
+
+        # (2) Infection notifications -- propagate carriers to a fixed point.
         newly = []
         changed = True
         while changed:
@@ -88,6 +113,7 @@ class ContaminationTracker:
                     newly.append(other)
                     from_source = carrier in self.source_classes
                     self.notifications.append({
+                        "kind": "infection",
                         "item": other,
                         "via": "peanut butter" if from_source else carrier,
                         "via_kind": "source" if from_source else "item",
@@ -98,6 +124,7 @@ class ContaminationTracker:
                                     f"{other} contaminated by contact with {carrier}"),
                     })
                     changed = True
+        self.new_infections = newly
         return newly
 
     # -- serialization -----------------------------------------------------

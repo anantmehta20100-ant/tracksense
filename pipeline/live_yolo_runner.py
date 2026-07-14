@@ -147,16 +147,22 @@ def _overlapping_pairs(result):
     return pairs, meta
 
 
-def _draw_contam_banner(img, infected, newly):
-    """Bottom status line of infected items; a red flash bar on a NEW infection."""
+def _draw_contam_banner(img, infected, new_infections, new_allergens):
+    """Bottom status line of infected items; a top flash bar on a NEW event --
+    red for a new infection, amber for a first allergen detection."""
     import cv2
 
     h, w = img.shape[:2]
-    if newly:
+    flash = None
+    if new_infections:
+        flash = ("! CONTAMINATION: " + ", ".join(new_infections), (0, 0, 200))     # red (BGR)
+    elif new_allergens:
+        flash = ("! ALLERGEN DETECTED: " + ", ".join(new_allergens), (0, 130, 220))  # amber (BGR)
+    if flash:
+        msg, col = flash
         bar = img.copy()
-        cv2.rectangle(bar, (0, 0), (w, 42), (0, 0, 200), -1)
+        cv2.rectangle(bar, (0, 0), (w, 42), col, -1)
         cv2.addWeighted(bar, 0.85, img, 0.15, 0, img)
-        msg = "! CONTAMINATION: " + ", ".join(newly)
         cv2.putText(img, msg, (12, 29), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
     line = ("INFECTED: " + ", ".join(infected)) if infected else "no contamination detected"
     cv2.putText(img, line, (12, h - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
@@ -204,7 +210,8 @@ def draw_contamination_overlay(img, result, tracker, *, frame_index=0, timestamp
         cv2.putText(img, label, (x1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
         cv2.putText(img, label, (x1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
-    _draw_contam_banner(img, sorted(tracker.infected), newly)
+    _draw_contam_banner(img, sorted(tracker.infected), newly,
+                        getattr(tracker, "new_allergens", []))
     return img
 
 
