@@ -161,6 +161,8 @@ strong { color: var(--ink); font-weight: 600; }
 .btn:hover:not(:disabled) { border-color: var(--ink); background: var(--surface-2); }
 .btn-primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .btn-primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-danger { background: var(--high-ink); border-color: var(--high-ink); color: #fff; }
+.btn-danger:hover:not(:disabled) { background: #8a1d14; border-color: #8a1d14; color: #fff; }
 .btn:disabled { opacity: .45; cursor: default; }
 .progress { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .pbar { width: 200px; height: 4px; background: var(--surface-2); border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }

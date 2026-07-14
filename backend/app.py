@@ -307,6 +307,12 @@ def create_app(model_path=None) -> Flask:
     def index():
         return render_template("index.html")
 
+    @app.route("/alert")
+    def alert_page():
+        """Emergency page: a big 'I'm having an allergic reaction' button that
+        reveals anaphylaxis first-aid guidance + a tap-to-dial emergency button."""
+        return render_template("alert.html")
+
     # -- read endpoints ----------------------------------------------------
     @app.route("/api/status")
     def status():

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TrackSense — Allergic Reaction Emergency</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    .em-wrap { max-width: 680px; }
+    .em-hero .brand { color: var(--high-ink); }
+    .big-btn {
+      display: block; width: 100%; border: none; border-radius: 12px;
+      background: var(--high-ink); color: #fff; font-weight: 700; font-size: 22px;
+      padding: 26px 20px; cursor: pointer; line-height: 1.25; text-align: center;
+      font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+      box-shadow: 0 6px 20px rgba(163, 34, 24, .28);
+      transition: transform .1s ease, box-shadow .2s ease;
+    }
+    .big-btn:active { transform: translateY(2px); box-shadow: 0 3px 12px rgba(163, 34, 24, .28); }
+    .big-btn .sub { display: block; font-size: 12px; font-weight: 500; opacity: .9;
+      margin-top: 8px; text-transform: uppercase; letter-spacing: .12em; }
+    .call-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+      border-radius: 10px; background: #0a7d2c; color: #fff; font-size: 20px; font-weight: 700;
+      padding: 20px; text-decoration: none; margin-bottom: 4px;
+      font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+    }
+    .call-btn:active { background: #086324; }
+    .steps { counter-reset: step; list-style: none; padding: 0; margin: 6px 0 0; }
+    .steps > li { position: relative; padding: 14px 14px 14px 54px; margin-bottom: 10px;
+      background: var(--surface); border: 1px solid var(--rule); border-left: 3px solid var(--high-ink);
+      border-radius: 6px; font-size: 15.5px; line-height: 1.5; }
+    .steps > li::before { counter-increment: step; content: counter(step);
+      position: absolute; left: 12px; top: 12px; width: 30px; height: 30px;
+      background: var(--high-ink); color: #fff; border-radius: 50%; font-size: 15px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      font-family: ui-sans-serif, system-ui, sans-serif; }
+    .steps b { color: var(--high-ink); }
+    .signs { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+    .sign { background: var(--high-bg); color: var(--high-ink); border: 1px solid var(--high-line);
+      padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 600;
+      font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif; }
+    #emergency { display: none; }
+    #emergency.show { display: block; animation: em-in .25s ease both; }
+    @keyframes em-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { #emergency.show { animation: none; } }
+    .disclaimer { margin-top: 16px; padding: 12px 14px; border-radius: 6px; font-size: 13px;
+      line-height: 1.55; background: var(--surface-2); border: 1px solid var(--rule); color: var(--ink-2); }
+  </style>
+</head>
+<body>
+  <div class="wrap em-wrap">
+    <header class="hero panel em-hero">
+      <div class="hero-top">
+        <div>
+          <h1 class="brand">Allergic Reaction</h1>
+          <p class="tagline">Emergency guidance &middot; nut allergy / anaphylaxis</p>
+        </div>
+        <a class="pill" href="/">&larr; Dashboard</a>
+      </div>
+      <p class="lede">If you or someone nearby may be having a severe allergic reaction, tap the button below.</p>
+    </header>
+
+    <section class="panel">
+      <button class="big-btn" id="trigger">
+        ⚠ I'M HAVING AN ALLERGIC REACTION
+        <span class="sub">Tap for emergency steps</span>
+      </button>
+    </section>
+
+    <section class="panel" id="emergency" aria-live="polite">
+      <div class="sectitle" style="color: var(--high-ink)">Do this now</div>
+
+      <a class="call-btn" href="tel:911">📞 Call 911</a>
+      <p class="muted small" style="margin: 2px 0 14px">
+        Or your local emergency number. Tell them: “anaphylaxis — a severe allergic reaction.”</p>
+
+      <ol class="steps">
+        <li><b>Use epinephrine (EpiPen) immediately</b> if one is available — inject into the middle of
+          the outer thigh and hold it in place per the device's instructions. Don't wait to see if it
+          gets worse; epinephrine is the first and most important treatment.</li>
+        <li><b>Lie down and raise the legs.</b> If breathing is hard or there's vomiting, sit up instead.
+          Do <b>not</b> stand up or walk around — it can cause a dangerous drop in blood pressure.</li>
+        <li><b>Stay with the person.</b> Keep them calm and still and loosen any tight clothing.</li>
+        <li><b>Give a second dose if needed.</b> If there's no improvement after 5–15 minutes and a second
+          auto-injector is available, use it.</li>
+        <li><b>Note the time</b> epinephrine was given and tell the paramedics.</li>
+        <li><b>Go to the ER even if symptoms improve.</b> Reactions can return hours later (a biphasic reaction).</li>
+      </ol>
+
+      <p class="muted small" style="margin-top: 14px">
+        <b>Antihistamines (e.g. Benadryl) are not a substitute for epinephrine</b> — they do not stop anaphylaxis.</p>
+
+      <div class="sectitle" style="margin-top: 20px; color: var(--high-ink)">Warning signs of anaphylaxis</div>
+      <div class="signs">
+        <span class="sign">Trouble breathing</span>
+        <span class="sign">Throat tightness</span>
+        <span class="sign">Swelling of lips / tongue / face</span>
+        <span class="sign">Spreading hives</span>
+        <span class="sign">Dizzy or faint</span>
+        <span class="sign">Rapid pulse</span>
+        <span class="sign">Vomiting</span>
+        <span class="sign">Sense of doom</span>
+      </div>
+
+      <div class="disclaimer">
+        This is general first-aid information, <b>not medical advice</b>, and not a substitute for professional
+        care. In an emergency, call your local emergency number immediately and follow the instructions on your
+        epinephrine auto-injector and your allergist's anaphylaxis action plan.
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      var trigger = document.getElementById("trigger");
+      var em = document.getElementById("emergency");
+      trigger.addEventListener("click", function () {
+        em.classList.add("show");
+        em.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    })();
+  </script>
+</body>
+</html>
