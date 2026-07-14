@@ -14,6 +14,25 @@
     .cam-stage img { width: 100%; display: block; }
     .cam-msg { color: var(--muted); padding: 48px 24px; text-align: center; }
     .cam-actions { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; align-items: center; }
+    .contam-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; }
+    .contam-chip {
+      padding: 4px 10px; border-radius: 2px; font-size: 12px; font-weight: 600;
+      background: var(--high-bg); color: var(--high-ink); border: 1px solid var(--high-line);
+      font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .contam-chip.source { background: var(--med-bg); color: var(--med-ink); border-color: var(--med-line); }
+    .contam-chip.clean  { background: var(--low-bg); color: var(--low-ink); border-color: var(--low-line); }
+    .contam-feed { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+    .contam-note {
+      padding: 10px 13px; border-radius: 3px; font-size: 13px; color: var(--ink-2);
+      background: var(--high-bg); border: 1px solid var(--high-line); border-left: 3px solid var(--high-ink);
+      animation: contam-in .35s cubic-bezier(.2,.7,.2,1) both;
+    }
+    .contam-note b { color: var(--high-ink); }
+    .contam-empty { color: var(--muted); }
+    @keyframes contam-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .contam-note { animation: none; } }
   </style>
 </head>
 <body>
@@ -49,6 +68,16 @@
       </div>
     </section>
 
+    <section class="panel" id="contam-panel">
+      <div class="sectitle">Contamination monitor</div>
+      <p class="muted small" id="contam-status">Waiting for stream&hellip;</p>
+      <div class="contam-chips" id="contam-chips"></div>
+      <div class="contam-feed" id="contam-feed">
+        <div class="contam-empty small">Touch an item to the peanut butter to flag it as infected. Anything an
+          infected item then touches is infected too. Memory resets when you restart the stream.</div>
+      </div>
+    </section>
+
     <section class="panel verify">
       <div class="sectitle">Verification &amp; Limitations</div>
       <div class="verify-flag"><span class="badge b-verify">physical_verification: false</span></div>
@@ -66,8 +95,61 @@
       var img = document.getElementById("cam");
       var err = document.getElementById("cam-error");
       img.addEventListener("error", function () { img.style.display = "none"; err.hidden = false; });
+
+      // -- Contamination monitor: poll the checker and render infected items + notifications.
+      var statusEl = document.getElementById("contam-status");
+      var chipsEl = document.getElementById("contam-chips");
+      var feedEl = document.getElementById("contam-feed");
+      var INTRO = feedEl.innerHTML;
+      var lastCount = -1;
+
+      function renderFeed(notes) {
+        if (notes.length === lastCount) return;   // only re-render (and re-animate) on change
+        lastCount = notes.length;
+        if (!notes.length) { feedEl.innerHTML = INTRO; return; }
+        feedEl.innerHTML = "";
+        notes.slice().reverse().forEach(function (n) {
+          var d = document.createElement("div");
+          d.className = "contam-note";
+          d.innerHTML = "<b>⚠ " + String(n.item).toUpperCase() + " INFECTED</b> &mdash; " +
+            (n.message || "");
+          feedEl.appendChild(d);
+        });
+      }
+
+      function render(state) {
+        if (!state || !state.active) {
+          statusEl.textContent = "Waiting for stream…";
+          chipsEl.innerHTML = ""; renderFeed([]); return;
+        }
+        var infected = state.infected || [];
+        var seen = state.sources_seen || [];
+        statusEl.textContent = infected.length
+          ? (infected.length + " item" + (infected.length > 1 ? "s" : "") + " contaminated")
+          : (seen.length ? "Peanut butter in view — no cross-contact yet"
+                         : "Monitoring… nothing contaminated");
+        chipsEl.innerHTML = "";
+        seen.forEach(function (s) { addChip("source: " + s, "source"); });
+        infected.forEach(function (it) { addChip(it, ""); });
+        if (!seen.length && !infected.length) addChip("clean", "clean");
+        renderFeed(state.notifications || []);
+      }
+      function addChip(text, cls) {
+        var c = document.createElement("span");
+        c.className = "contam-chip" + (cls ? " " + cls : "");
+        c.textContent = text;
+        chipsEl.appendChild(c);
+      }
+      function poll() {
+        fetch("/api/camera/contamination").then(function (r) { return r.json(); })
+          .then(render).catch(function () {});
+      }
+      setInterval(poll, 700);
+      poll();
+
       document.getElementById("reload").onclick = function () {
         err.hidden = true; img.style.display = "";
+        lastCount = -1; feedEl.innerHTML = INTRO; chipsEl.innerHTML = "";  // reflect the reset at once
         img.src = "/api/camera/stream?t=" + Date.now();
       };
     })();

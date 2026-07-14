@@ -67,6 +67,7 @@ class LiveRiskService:
         self._names = None
         self._detect = None
         self._pipeline = None
+        self._contam = None   # per-session contamination memory (reset on each start)
 
         self._latest_snapshot = None
         self._latest_jpeg = None
@@ -83,6 +84,10 @@ class LiveRiskService:
 
     def latest_jpeg(self):
         return self._latest_jpeg
+
+    def contamination_state(self):
+        """Current contamination memory (or None if never started)."""
+        return self._contam.state() if self._contam is not None else None
 
     def status(self) -> dict:
         return {
@@ -129,6 +134,9 @@ class LiveRiskService:
             if not CAMERA_LOCK.acquire(blocking=False):
                 self._error = "camera busy (a camera tab may be open); close it and retry"
                 return {"running": False, "error": self._error}
+
+            from pipeline.contamination import ContaminationTracker
+            self._contam = ContaminationTracker()  # fresh memory each (re)start
 
             self._stop.clear()
             self._error = None
@@ -195,11 +203,12 @@ class LiveRiskService:
         import cv2
 
         from pipeline.live_yolo_runner import (  # reuse the CLI bridge
-            _detections_from_result, draw_collision_overlay, inflate_result_boxes)
+            _detections_from_result, draw_contamination_overlay, inflate_result_boxes)
         result = self._model(frame, verbose=False, imgsz=self._imgsz)[0]
         dets = _detections_from_result(result, self._names, frame_index, timestamp)
         inflate_result_boxes(result)  # visual only: enlarge drawn boxes (dets already extracted)
-        annotated = draw_collision_overlay(result.plot(), result)  # flag touching boxes
+        annotated = draw_contamination_overlay(  # touching boxes + sticky contamination tags
+            result.plot(), result, self._contam, frame_index=frame_index, timestamp=timestamp)
         ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])
         return dets, (buf.tobytes() if ok else None)
 

@@ -125,6 +125,89 @@ def draw_collision_overlay(img, result):
     return img
 
 
+def _overlapping_pairs(result):
+    """Parse one YOLO result into ([(classA, classB), ...], [(x1,y1,x2,y2,class), ...]):
+    the class pairs whose boxes overlap this frame, plus per-box geometry+class.
+    Same overlap test as draw_collision_overlay, but class-aware so the
+    contamination tracker can reason about WHAT touched what."""
+    boxes = getattr(result, "boxes", None)
+    names = getattr(result, "names", {}) or {}
+    meta = []
+    if boxes is not None:
+        for b in boxes:
+            x1, y1, x2, y2 = [int(v) for v in b.xyxy[0].tolist()]
+            meta.append((x1, y1, x2, y2, names.get(int(b.cls[0]), str(int(b.cls[0])))))
+    pairs = []
+    for i in range(len(meta)):
+        ax1, ay1, ax2, ay2, ac = meta[i]
+        for j in range(i + 1, len(meta)):
+            bx1, by1, bx2, by2, bc = meta[j]
+            if min(ax2, bx2) > max(ax1, bx1) and min(ay2, by2) > max(ay1, by1):
+                pairs.append((ac, bc))
+    return pairs, meta
+
+
+def _draw_contam_banner(img, infected, newly):
+    """Bottom status line of infected items; a red flash bar on a NEW infection."""
+    import cv2
+
+    h, w = img.shape[:2]
+    if newly:
+        bar = img.copy()
+        cv2.rectangle(bar, (0, 0), (w, 42), (0, 0, 200), -1)
+        cv2.addWeighted(bar, 0.85, img, 0.15, 0, img)
+        msg = "! CONTAMINATION: " + ", ".join(newly)
+        cv2.putText(img, msg, (12, 29), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    line = ("INFECTED: " + ", ".join(infected)) if infected else "no contamination detected"
+    cv2.putText(img, line, (12, h - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
+    cv2.putText(img, line, (12, h - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                (0, 0, 255) if infected else (0, 190, 0), 2)
+
+
+def draw_contamination_overlay(img, result, tracker, *, frame_index=0, timestamp=0.0):
+    """Contamination-aware replacement for draw_collision_overlay. Updates
+    `tracker` with this frame's touching class pairs, then annotates the frame:
+    translucent red on each contact patch, a SOURCE/INFECTED tag + coloured box
+    on every carrier, and a banner of infected items (flashing on a new one).
+    Returns `img`. Pure per-frame geometry + the sticky class memory."""
+    import cv2
+
+    pairs, meta = _overlapping_pairs(result)
+    newly = tracker.observe(pairs, frame_index=frame_index, timestamp=timestamp,
+                            present_classes=[m[4] for m in meta])
+
+    # Translucent red fill on the touching regions (contact cue).
+    if pairs:
+        overlay = img.copy()
+        for i in range(len(meta)):
+            ax1, ay1, ax2, ay2, _ = meta[i]
+            for j in range(i + 1, len(meta)):
+                bx1, by1, bx2, by2, _ = meta[j]
+                ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+                ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+                if ix2 > ix1 and iy2 > iy1:
+                    cv2.rectangle(overlay, (ix1, iy1), (ix2, iy2), (0, 0, 255), -1)
+        cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)
+
+    # Tag every carrier box by status (clean boxes keep YOLO's own label only).
+    for x1, y1, x2, y2, cls in meta:
+        status = tracker.status(cls)
+        if status == "source":
+            color, tag = (0, 140, 255), "PEANUT SOURCE"      # orange
+        elif status == "infected":
+            color, tag = (0, 0, 255), "INFECTED"             # red
+        else:
+            continue
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
+        label = f"{tag}: {cls}"
+        ty = max(16, y1 - 8)
+        cv2.putText(img, label, (x1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
+        cv2.putText(img, label, (x1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+    _draw_contam_banner(img, sorted(tracker.infected), newly)
+    return img
+
+
 def _draw_overlay(img, frame_classes, expect_pair, contact_active):
     """Draw a readable status HUD (black outline + colour) onto the annotated frame."""
     import cv2

@@ -94,13 +94,21 @@ CAMERA_MODEL_PATH = YOLO_MODEL_PATH
 CAMERA_INDEX = int(os.environ.get("TRACKSENSE_CAMERA_INDEX", "0"))
 
 
-def _mjpeg_stream(model, camera_index=0, jpeg_quality=70):
+def _mjpeg_stream(model, camera_index=0, jpeg_quality=70, contamination=None):
     """Standalone visual stream: yield annotated webcam frames as MJPEG. Releases
     BOTH the camera handle and CAMERA_LOCK when the client disconnects (tab closed).
-    Only used when live-risk mode is NOT running (so the camera is never opened twice)."""
+    Only used when live-risk mode is NOT running (so the camera is never opened twice).
+
+    `contamination` is the per-stream ContaminationTracker; a fresh one is created
+    for each stream request (see camera_stream), so restarting the stream reloads
+    the checker with an empty memory."""
     import cv2  # lazy: only imported when a stream is actually requested
 
-    from pipeline.live_yolo_runner import draw_collision_overlay, inflate_result_boxes
+    from pipeline.contamination import ContaminationTracker
+    from pipeline.live_yolo_runner import draw_contamination_overlay, inflate_result_boxes
+
+    if contamination is None:
+        contamination = ContaminationTracker()
 
     cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)  # DSHOW is the reliable Windows backend
     if not cap.isOpened():
@@ -108,6 +116,7 @@ def _mjpeg_stream(model, camera_index=0, jpeg_quality=70):
         cap = cv2.VideoCapture(camera_index)
     try:
         misses = 0
+        frame_index = 0
         while cap.isOpened():
             ok, frame = cap.read()
             if not ok or frame is None:
@@ -118,7 +127,11 @@ def _mjpeg_stream(model, camera_index=0, jpeg_quality=70):
             misses = 0
             result = model(frame, verbose=False)[0]
             inflate_result_boxes(result)  # enlarge drawn boxes a bit
-            annotated = draw_collision_overlay(result.plot(), result)  # boxes + collision cue
+            # boxes + collision cue + sticky contamination tags/notifications
+            annotated = draw_contamination_overlay(
+                result.plot(), result, contamination,
+                frame_index=frame_index, timestamp=time.time())
+            frame_index += 1
             ok2, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
             if not ok2:
                 continue
@@ -397,8 +410,29 @@ def create_app(model_path=None) -> Flask:
         # One camera user at a time (single physical camera handle).
         if not CAMERA_LOCK.acquire(blocking=False):
             return jsonify({"error": "camera already in use (live mode or another tab)"}), 409
-        return Response(_mjpeg_stream(model, CAMERA_INDEX),
+        # Fresh contamination memory per stream: (re)starting the stream reloads
+        # the checker with an empty slate.
+        from pipeline.contamination import ContaminationTracker
+        contamination = ContaminationTracker()
+        app.config["CONTAM"] = contamination
+        return Response(_mjpeg_stream(model, CAMERA_INDEX, contamination=contamination),
                         mimetype="multipart/x-mixed-replace; boundary=frame")
+
+    @app.route("/api/camera/contamination")
+    def camera_contamination():
+        """Current cross-contamination state for the camera page's notification
+        feed. Reflects live-risk mode's tracker when it owns the camera, else the
+        standalone visual stream's tracker; empty before any stream has started."""
+        live_svc = live()
+        if live_svc.running and getattr(live_svc, "contamination_state", None):
+            state = live_svc.contamination_state()
+            if state is not None:
+                return jsonify({"active": True, **state})
+        contamination = app.config.get("CONTAM")
+        if contamination is None:
+            return jsonify({"active": False, "infected": [], "notifications": [],
+                            "sources_seen": [], "count": 0})
+        return jsonify({"active": True, **contamination.state()})
 
     return app
 
