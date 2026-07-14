@@ -104,5 +104,54 @@ class ContaminationRules(unittest.TestCase):
         self.assertEqual(fresh.notifications, [])
 
 
+class ContaminationRisk(unittest.TestCase):
+    JARBOX = (0, 0, 100, 100)   # source bbox: top y=0, bottom y=100
+
+    def test_touch_top_of_peanut_butter_is_high_risk(self):
+        t = ContaminationTracker()
+        # cutlery contacting the TOP of the jar
+        t.observe([(JAR, "cutlery")], boxes={JAR: self.JARBOX, "cutlery": (10, -40, 90, 0)})
+        self.assertAlmostEqual(t.risk_of("cutlery"), 0.9, places=3)
+
+    def test_touch_bottom_of_peanut_butter_is_low_risk(self):
+        t = ContaminationTracker()
+        # cutlery contacting the BOTTOM of the jar
+        t.observe([(JAR, "cutlery")], boxes={JAR: self.JARBOX, "cutlery": (10, 100, 90, 140)})
+        self.assertAlmostEqual(t.risk_of("cutlery"), 0.4, places=3)
+
+    def test_middle_contact_is_between(self):
+        t = ContaminationTracker()
+        t.observe([(JAR, "cutlery")], boxes={JAR: self.JARBOX, "cutlery": (10, 40, 90, 60)})
+        self.assertAlmostEqual(t.risk_of("cutlery"), 0.65, places=3)   # midpoint
+
+    def test_risk_decays_along_the_spread_chain(self):
+        t = ContaminationTracker()
+        t.observe([(JAR, "cutlery")], boxes={JAR: self.JARBOX, "cutlery": (10, -40, 90, 0)})  # 0.9
+        t.observe([("cutlery", "bread")])     # spread: 0.9 * 0.6
+        t.observe([("bread", "plate")])       # spread: 0.54 * 0.6
+        self.assertAlmostEqual(t.risk_of("cutlery"), 0.9, places=3)
+        self.assertAlmostEqual(t.risk_of("bread"), 0.54, places=3)
+        self.assertAlmostEqual(t.risk_of("plate"), 0.324, places=3)
+
+    def test_risk_without_geometry_defaults_to_worst_case(self):
+        t = ContaminationTracker()
+        t.observe([(JAR, "cutlery")])         # no boxes -> conservative default
+        self.assertAlmostEqual(t.risk_of("cutlery"), 0.9, places=3)
+
+    def test_clean_item_has_zero_risk_and_risk_in_state(self):
+        t = ContaminationTracker()
+        t.observe([(JAR, "cutlery")])
+        self.assertEqual(t.risk_of("plate"), 0.0)
+        self.assertIn("cutlery", t.state()["risk"])
+        self.assertNotIn("plate", t.state()["risk"])
+
+    def test_infection_notification_carries_the_risk(self):
+        t = ContaminationTracker()
+        t.observe([(JAR, "cutlery")], boxes={JAR: self.JARBOX, "cutlery": (10, -40, 90, 0)})
+        note = [n for n in t.notifications if n["kind"] == "infection"][0]
+        self.assertAlmostEqual(note["risk"], 0.9, places=3)
+        self.assertIn("0.90", note["message"])
+
+
 if __name__ == "__main__":
     unittest.main()

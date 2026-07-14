@@ -149,7 +149,10 @@
                          : "Monitoring… nothing contaminated");
         chipsEl.innerHTML = "";
         seen.forEach(function (s) { addChip("source: " + s, "source"); });
-        infected.forEach(function (it) { addChip(it, ""); });
+        infected.forEach(function (it) {
+          var r = (state.risk && state.risk[it] != null) ? "  " + state.risk[it].toFixed(2) : "";
+          addChip(it + r, "");
+        });
         if (!seen.length && !infected.length) addChip("clean", "clean");
         renderFeed(state.notifications || []);
       }

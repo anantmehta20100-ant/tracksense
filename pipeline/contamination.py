@@ -32,6 +32,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from config.allergens import ALLERGEN_SOURCE_CLASSES
 
+# --- Graded contact-risk model (deterministic; tunable) --------------------
+# Touching the SOURCE (peanut butter) is riskier at the TOP (near the opening /
+# the spread) than at the BOTTOM (the base of the jar). The initial risk is
+# interpolated by WHERE, vertically, the contact lands within the source's box.
+SOURCE_TOP_RISK = 0.9          # contact at the very top of the peanut butter
+SOURCE_BOTTOM_RISK = 0.4       # contact at the very bottom
+SOURCE_DEFAULT_RISK = SOURCE_TOP_RISK   # worst-case fallback when geometry is unknown
+# Each further hop of spread multiplies the risk down (contamination dilutes as
+# it travels object -> object): 0.9 -> 0.54 -> 0.32 -> ...
+SPREAD_DECAY = 0.6
+
 
 class ContaminationTracker:
     """Sticky, class-keyed cross-contamination memory for one stream session."""
@@ -42,6 +53,7 @@ class ContaminationTracker:
             source_classes if source_classes is not None else ALLERGEN_SOURCE_CLASSES.keys()
         )
         self.infected = set()        # class names that have been contaminated (sticky)
+        self.risk = {}               # class name -> graded contamination risk (0..1)
         self.sources_seen = set()    # source classes actually observed on camera
         self.notifications = []      # chronological log: allergen-detected + infection events
         self.frame_index = 0
@@ -61,17 +73,44 @@ class ContaminationTracker:
             return "infected"
         return "clean"
 
+    def risk_of(self, class_name: str) -> float:
+        """Current graded contamination risk (0..1) for a class; 0.0 if clean."""
+        return self.risk.get(class_name, 0.0)
+
+    def _source_risk(self, source_box, item_box) -> float:
+        """Risk from touching the SOURCE, graded by WHERE the contact lands on it:
+        the TOP of the peanut butter -> SOURCE_TOP_RISK, the BOTTOM ->
+        SOURCE_BOTTOM_RISK, linearly interpolated by the vertical position of the
+        contact within the source's bounding box. Falls back to the worst case
+        when contact geometry is unavailable (e.g. no boxes were passed)."""
+        if not source_box:
+            return SOURCE_DEFAULT_RISK
+        sx1, sy1, sx2, sy2 = source_box
+        if item_box:
+            iy1, iy2 = max(sy1, item_box[1]), min(sy2, item_box[3])
+            contact_y = (iy1 + iy2) / 2.0 if iy2 > iy1 else (item_box[1] + item_box[3]) / 2.0
+        else:
+            contact_y = (sy1 + sy2) / 2.0
+        height = max(1.0, float(sy2 - sy1))
+        t = min(1.0, max(0.0, (contact_y - sy1) / height))   # 0 at top, 1 at bottom
+        return round(SOURCE_TOP_RISK - t * (SOURCE_TOP_RISK - SOURCE_BOTTOM_RISK), 3)
+
     # -- update ------------------------------------------------------------
-    def observe(self, pairs, *, frame_index=0, timestamp=0.0, present_classes=None):
+    def observe(self, pairs, *, frame_index=0, timestamp=0.0, present_classes=None, boxes=None):
         """Apply the detection + infection rules for one frame.
 
         `pairs` is an iterable of (classA, classB) that are TOUCHING this frame.
-        Emits two kinds of notification:
+        `boxes` (optional) maps class name -> (x1, y1, x2, y2); when given, a
+        contact with the source is risk-graded by WHERE on the source it lands
+        (top of the peanut butter = high, bottom = low), and each further hop of
+        spread decays the risk. Emits two kinds of notification:
           * "allergen"  -- once, the first time a source (peanut butter) is seen.
-          * "infection" -- once per newly-infected item; propagation runs to a
-            fixed point so a chain landing in a single frame fully resolves.
+          * "infection" -- once per newly-infected item (carries its risk score);
+            propagation runs to a fixed point so a chain landing in a single
+            frame fully resolves.
         Returns the list of newly-infected class names (used for the on-frame flash).
         """
+        boxes = boxes or {}
         self.frame_index = frame_index
         edges = [(a, b) for a, b in pairs if a != b]  # ignore same-class double-detections
 
@@ -112,16 +151,23 @@ class ContaminationTracker:
                     self.infected.add(other)
                     newly.append(other)
                     from_source = carrier in self.source_classes
+                    if from_source:
+                        risk = self._source_risk(boxes.get(carrier), boxes.get(other))
+                    else:
+                        # Spread from an already-infected carrier: decay its risk.
+                        risk = round(self.risk.get(carrier, SOURCE_DEFAULT_RISK) * SPREAD_DECAY, 3)
+                    self.risk[other] = max(self.risk.get(other, 0.0), risk)
                     self.notifications.append({
                         "kind": "infection",
                         "item": other,
                         "via": "peanut butter" if from_source else carrier,
                         "via_kind": "source" if from_source else "item",
+                        "risk": risk,
                         "frame_index": frame_index,
                         "timestamp": timestamp,
-                        "message": (f"{other} contaminated by the peanut butter"
+                        "message": (f"{other} contaminated by the peanut butter (risk {risk:.2f})"
                                     if from_source else
-                                    f"{other} contaminated by contact with {carrier}"),
+                                    f"{other} contaminated by contact with {carrier} (risk {risk:.2f})"),
                     })
                     changed = True
         self.new_infections = newly
@@ -132,6 +178,7 @@ class ContaminationTracker:
         """Flat snapshot for GET /api/camera/contamination (and the DOM poller)."""
         return {
             "infected": sorted(self.infected),
+            "risk": {k: round(v, 3) for k, v in self.risk.items()},
             "sources": sorted(self.source_classes),
             "sources_seen": sorted(self.sources_seen),
             "notifications": list(self.notifications),

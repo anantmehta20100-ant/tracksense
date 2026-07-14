@@ -519,8 +519,9 @@ def create_app(model_path=None) -> Flask:
         if contam is None:
             contam = ContaminationTracker()
             app.config["PHONE_CONTAM"] = contam
+        box_map = {m[4]: (m[0], m[1], m[2], m[3]) for m in meta}   # class -> bbox for risk grading
         contam.observe(pairs, frame_index=contam.frame_index + 1,
-                       present_classes=[m[4] for m in meta])
+                       present_classes=[m[4] for m in meta], boxes=box_map)
 
         boxes = getattr(result, "boxes", None)
         confs = [float(b.conf[0]) for b in boxes] if boxes is not None else []
@@ -530,6 +531,7 @@ def create_app(model_path=None) -> Flask:
             "conf": round(confs[i], 3) if i < len(confs) else None,
             "bbox": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
             "status": contam.status(cls),
+            "risk": round(contam.risk_of(cls), 3),
         } for i, (x1, y1, x2, y2, cls) in enumerate(meta)]
         return jsonify({"image_size": [w, h], "detections": detections, **contam.state()})
 

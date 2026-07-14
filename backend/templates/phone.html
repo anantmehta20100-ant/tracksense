@@ -191,7 +191,10 @@
           vctx.lineWidth = Math.max(2, view.width / 220);
           vctx.strokeStyle = c;
           vctx.strokeRect(x, y, w, h);
-          var tag = d.status === "source" ? "PEANUT" : (d.status === "infected" ? "INFECTED" : d.class);
+          var tag = d.status === "source" ? "PEANUT"
+            : (d.status === "infected"
+                ? "INFECTED " + (d.risk != null ? d.risk.toFixed(2) : "")
+                : d.class);
           vctx.font = "600 " + Math.max(13, view.width / 34) + "px system-ui, sans-serif";
           var tw = vctx.measureText(tag).width + 10;
           vctx.fillStyle = c;
@@ -219,7 +222,10 @@
           : (seen.length ? "Peanut butter detected — no cross-contact yet" : "Monitoring… nothing contaminated");
         chipsEl.innerHTML = "";
         seen.forEach(function (s) { addChip("source: " + s, "source"); });
-        infected.forEach(function (it) { addChip(it, ""); });
+        infected.forEach(function (it) {
+          var r = (state.risk && state.risk[it] != null) ? "  " + state.risk[it].toFixed(2) : "";
+          addChip(it + r, "");
+        });
         if (!seen.length && !infected.length) addChip("clean", "clean");
         var notes = state.notifications || [];
         if (notes.length === lastCount) return;

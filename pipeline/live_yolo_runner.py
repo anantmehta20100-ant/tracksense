@@ -179,8 +179,9 @@ def draw_contamination_overlay(img, result, tracker, *, frame_index=0, timestamp
     import cv2
 
     pairs, meta = _overlapping_pairs(result)
+    boxes = {m[4]: (m[0], m[1], m[2], m[3]) for m in meta}   # class -> bbox, for risk grading
     newly = tracker.observe(pairs, frame_index=frame_index, timestamp=timestamp,
-                            present_classes=[m[4] for m in meta])
+                            present_classes=[m[4] for m in meta], boxes=boxes)
 
     # Translucent red fill on the touching regions (contact cue).
     if pairs:
@@ -205,7 +206,8 @@ def draw_contamination_overlay(img, result, tracker, *, frame_index=0, timestamp
         else:
             continue
         cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
-        label = f"{tag}: {cls}"
+        label = (f"{tag}: {cls} ({tracker.risk_of(cls):.2f})"
+                 if status == "infected" else f"{tag}: {cls}")
         ty = max(16, y1 - 8)
         cv2.putText(img, label, (x1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4)
         cv2.putText(img, label, (x1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
