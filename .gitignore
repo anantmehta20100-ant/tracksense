@@ -7,6 +7,7 @@ data/training_photos/**
 !data/training_photos/SOURCING_NOTES.md
 model/checkpoints/
 venv/
+venv_torch/
 __pycache__/
 ml/data.unified.resolved.yaml
 ml/data.train.resolved.yaml

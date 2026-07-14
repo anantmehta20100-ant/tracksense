@@ -69,6 +69,62 @@ def _detections_from_result(result, names, frame_index, timestamp):
     return dets
 
 
+def inflate_result_boxes(result, margin=0.08):
+    """Pad each detected box outward by `margin` of its own size (clamped to the
+    frame) so the drawn boxes read a little larger. VISUAL ONLY -- call it AFTER
+    detections have been extracted; it does not affect tracked/risk coordinates."""
+    boxes = getattr(result, "boxes", None)
+    if boxes is None or len(boxes) == 0:
+        return result
+    data = boxes.data.clone()  # YOLO returns inference tensors -> clone before in-place edits
+    h, w = int(result.orig_shape[0]), int(result.orig_shape[1])
+    for row in data:
+        x1, y1, x2, y2 = float(row[0]), float(row[1]), float(row[2]), float(row[3])
+        pw = (x2 - x1) * margin
+        ph = (y2 - y1) * margin
+        row[0] = max(0.0, x1 - pw)
+        row[1] = max(0.0, y1 - ph)
+        row[2] = min(float(w - 1), x2 + pw)
+        row[3] = min(float(h - 1), y2 + ph)
+    boxes.data = data  # swap the enlarged boxes in so plot()/overlay use them
+    return result
+
+
+def draw_collision_overlay(img, result):
+    """Highlight where two detected bounding boxes touch/overlap on the annotated
+    frame -- a live visual cue that objects are in contact. Fills each overlapping
+    region with a translucent red patch, outlines it, and tags it "CONTACT". This
+    is pure per-frame geometry on the current boxes (it does NOT run the contact
+    tracker), so it flags touching boxes the instant they overlap. Returns `img`."""
+    import cv2
+
+    boxes = getattr(result, "boxes", None)
+    if boxes is None or len(boxes) < 2:
+        return img
+    rects = [tuple(b.xyxy[0].tolist()) for b in boxes]
+    hits = []
+    for i in range(len(rects)):
+        ax1, ay1, ax2, ay2 = rects[i]
+        for j in range(i + 1, len(rects)):
+            bx1, by1, bx2, by2 = rects[j]
+            ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+            ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+            if ix2 > ix1 and iy2 > iy1:      # boxes overlap -> intersection rectangle
+                hits.append((int(ix1), int(iy1), int(ix2), int(iy2)))
+    if not hits:
+        return img
+    overlay = img.copy()
+    for ix1, iy1, ix2, iy2 in hits:
+        cv2.rectangle(overlay, (ix1, iy1), (ix2, iy2), (0, 0, 255), -1)
+    cv2.addWeighted(overlay, 0.35, img, 0.65, 0, img)   # translucent red fill
+    for ix1, iy1, ix2, iy2 in hits:
+        cv2.rectangle(img, (ix1, iy1), (ix2, iy2), (0, 0, 255), 2)
+        ty = max(14, iy1 - 6)
+        cv2.putText(img, "CONTACT", (ix1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 4)
+        cv2.putText(img, "CONTACT", (ix1, ty), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2)
+    return img
+
+
 def _draw_overlay(img, frame_classes, expect_pair, contact_active):
     """Draw a readable status HUD (black outline + colour) onto the annotated frame."""
     import cv2

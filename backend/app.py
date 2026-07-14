@@ -100,6 +100,8 @@ def _mjpeg_stream(model, camera_index=0, jpeg_quality=70):
     Only used when live-risk mode is NOT running (so the camera is never opened twice)."""
     import cv2  # lazy: only imported when a stream is actually requested
 
+    from pipeline.live_yolo_runner import draw_collision_overlay, inflate_result_boxes
+
     cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)  # DSHOW is the reliable Windows backend
     if not cap.isOpened():
         cap.release()
@@ -114,7 +116,9 @@ def _mjpeg_stream(model, camera_index=0, jpeg_quality=70):
                     break
                 continue
             misses = 0
-            annotated = model(frame, verbose=False)[0].plot()  # boxes + labels drawn
+            result = model(frame, verbose=False)[0]
+            inflate_result_boxes(result)  # enlarge drawn boxes a bit
+            annotated = draw_collision_overlay(result.plot(), result)  # boxes + collision cue
             ok2, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality])
             if not ok2:
                 continue

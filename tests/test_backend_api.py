@@ -193,6 +193,12 @@ def _fake_detect(frame, frame_index, timestamp):
     return [jar, cutlery], None
 
 
+def _fake_detect_empty(frame, frame_index, timestamp):
+    """Zero detections every frame -> the live loop must keep running and produce a
+    valid (empty-objects) snapshot instead of crashing."""
+    return [], None
+
+
 class TestLiveRiskMode(unittest.TestCase):
     """Live YOLO risk mode via a mocked camera + detections (no hardware)."""
 
@@ -250,6 +256,31 @@ class TestLiveRiskMode(unittest.TestCase):
 
         self.assertFalse(self.c.post("/api/live/stop").get_json()["running"])
         self.assertFalse(svc.running)
+
+    def test_live_zero_detections_does_not_crash(self):
+        from pipeline.live_risk_service import LiveRiskService
+        from pipeline.risk_pipeline import RiskPipeline
+        svc = LiveRiskService(
+            model_path="fake-model.pt", rf_model_path=_RF_MODEL, camera_index=0,
+            capture_factory=_FakeCap, detect_fn=_fake_detect_empty,
+            pipeline_factory=lambda: RiskPipeline(model_path=_RF_MODEL, source_kind="yolo"))
+        _APP.config["LIVE"] = svc
+        self.assertTrue(self.c.post("/api/live/start").get_json()["running"])
+
+        for _ in range(300):                       # wait for at least one processed frame
+            if svc.snapshot() is not None:
+                break
+            time.sleep(0.01)
+        snap = svc.snapshot()
+        self.assertIsNotNone(snap)                 # loop survived zero-detection frames
+        self.assertEqual(snap["objects"], [])      # no objects, but a valid snapshot
+        self.assertFalse(snap["physical_verification"])
+
+        status = self.c.get("/api/live/status").get_json()
+        self.assertTrue(status["running"])
+        self.assertIsNone(status["error"])         # no crash recorded
+        self.assertFalse(status["physical_verification"])
+        self.assertFalse(self.c.post("/api/live/stop").get_json()["running"])
 
     def test_mock_snapshot_when_live_off(self):
         # With live mode off, /api/snapshot stays on the mock pipeline.

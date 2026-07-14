@@ -194,10 +194,13 @@ class LiveRiskService:
         """Real YOLO detection -> (Detection list, annotated jpeg bytes)."""
         import cv2
 
-        from pipeline.live_yolo_runner import _detections_from_result  # reuse the CLI bridge
+        from pipeline.live_yolo_runner import (  # reuse the CLI bridge
+            _detections_from_result, draw_collision_overlay, inflate_result_boxes)
         result = self._model(frame, verbose=False, imgsz=self._imgsz)[0]
         dets = _detections_from_result(result, self._names, frame_index, timestamp)
-        ok, buf = cv2.imencode(".jpg", result.plot(), [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])
+        inflate_result_boxes(result)  # visual only: enlarge drawn boxes (dets already extracted)
+        annotated = draw_collision_overlay(result.plot(), result)  # flag touching boxes
+        ok, buf = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, self._jpeg_quality])
         return dets, (buf.tobytes() if ok else None)
 
     def _loop(self):
