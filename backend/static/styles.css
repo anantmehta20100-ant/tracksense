@@ -250,6 +250,48 @@ strong { color: var(--ink); font-weight: 600; }
   border-top: 1px solid var(--rule); padding-top: 18px; }
 
 /* =====================================================================
+   Mobile — phones (<= 640px). Tighten the page ground, stack the hero,
+   make the controls full-width and thumb-friendly, and collapse the two
+   columns into one readable stream. Guards against horizontal scroll.
+   ===================================================================== */
+@media (max-width: 640px) {
+  body { overflow-x: hidden; }
+  .wrap { padding: 20px 14px 48px; }
+
+  .brand { font-size: clamp(30px, 10vw, 44px); line-height: 1.05; }
+  .tagline { font-size: 11px; letter-spacing: .12em; }
+  .hero-top { flex-direction: column; align-items: flex-start; gap: 12px; padding-bottom: 14px; }
+  .hero-status { justify-content: flex-start; }
+  .lede { font-size: 16px; margin: 16px 0 14px; }
+  .pitch { font-size: 15px; }
+
+  .panel { padding: 16px 15px; margin-bottom: 14px; }
+  .sectitle { font-size: 10.5px; }
+
+  /* Controls: two buttons per row, each a comfortable tap target; the
+     progress meter drops to its own full-width line. */
+  .controls-row { gap: 8px; }
+  .controls-row .btn { flex: 1 1 44%; text-align: center; padding: 12px 12px; }
+  .progress { width: 100%; margin-left: 0; }
+  .pbar { flex: 1; width: auto; }
+
+  .grid { gap: 14px; }
+  .cards { grid-template-columns: 1fr; }
+  .card-name { font-size: 15px; }
+  .timeline { max-height: 300px; }
+  .ev { grid-template-columns: 44px 1fr auto; gap: 8px; }
+  .gallery { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+  .exp-chain { gap: 6px; }
+  .foot { font-size: 12px; }
+}
+
+/* Very small phones (<= 380px): one button per row. */
+@media (max-width: 380px) {
+  .brand { font-size: 30px; }
+  .controls-row .btn { flex-basis: 100%; }
+}
+
+/* =====================================================================
    Motion — kept safe against app.js's 500ms innerHTML re-render:
    entrances only fire on the static structural panels (never on the
    re-rendered card/timeline/alert lists); everything else animates on
