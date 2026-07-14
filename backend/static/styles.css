@@ -28,6 +28,37 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+
+/* ---------------------------------------------------------------------------
+   Living paper ground — a slow, subtle warm aurora behind all content. Two
+   fixed, pointer-inert layers drift in opposite directions so the ground never
+   visibly loops. Panels are opaque, so this reads only through the hero, page
+   margins, and the gaps between panels: the content floats on breathing paper.
+   Tints are drawn from the risk palette (sienna / gold / green) at low alpha,
+   so it stays on-theme, not decorative. Pure CSS, no assets. Under
+   reduced-motion the animation is simply never applied (see the media blocks
+   below), leaving a calm static wash.
+   --------------------------------------------------------------------------- */
+body::before, body::after {
+  content: "";
+  position: fixed;
+  inset: -25vmax;                 /* oversized so drift/scale never bares an edge */
+  z-index: -1;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  will-change: transform;
+}
+body::before {
+  background:
+    radial-gradient(38vmax 38vmax at 18% 20%, rgba(156, 51, 22, .13), transparent 60%),
+    radial-gradient(34vmax 34vmax at 84% 28%, rgba(138, 90,  6, .11), transparent 60%),
+    radial-gradient(44vmax 44vmax at 68% 90%, rgba(47, 107, 61, .09), transparent 62%);
+}
+body::after {
+  background:
+    radial-gradient(30vmax 30vmax at 88% 12%, rgba(156, 51, 22, .08), transparent 60%),
+    radial-gradient(38vmax 38vmax at 10% 82%, rgba(138, 90,  6, .09), transparent 62%);
+}
 /* Sans is used only for chrome/labels; serif carries the reading text. */
 .sectitle, .pill, .badge, .btn, .card-meta, .ev-t, .node-name,
 .tagline, .mono, .foot, .smoke-summary, .warn-line, .error-line {
@@ -257,6 +288,12 @@ strong { color: var(--ink); font-weight: 600; }
 
   /* Live-mode heartbeat on the running status pill (persistent node). */
   .pill-running { animation: ts-heartbeat 2.2s ease-in-out infinite; }
+
+  /* Breathing paper ground — two layers drift on different periods so the
+     combined motion never audibly repeats. GPU-friendly: transform + opacity
+     only, no layout/paint churn. */
+  body::before { animation: ts-aurora-a 34s ease-in-out infinite alternate; }
+  body::after  { animation: ts-aurora-b 47s ease-in-out infinite alternate; }
 }
 
 @keyframes ts-rise {
@@ -269,4 +306,12 @@ strong { color: var(--ink); font-weight: 600; }
 @keyframes ts-heartbeat {
   0%, 100% { box-shadow: 0 0 0 0 rgba(47,107,61,.35); }
   50%      { box-shadow: 0 0 0 5px rgba(47,107,61,0); }
+}
+@keyframes ts-aurora-a {
+  from { transform: translate3d(0, 0, 0)          scale(1)    rotate(0deg); }
+  to   { transform: translate3d(3.5vmax, -2.5vmax, 0) scale(1.14) rotate(4deg); }
+}
+@keyframes ts-aurora-b {
+  from { transform: translate3d(0, 0, 0)          scale(1.06) rotate(0deg); }
+  to   { transform: translate3d(-3.5vmax, 2.5vmax, 0) scale(1)  rotate(-5deg); }
 }
