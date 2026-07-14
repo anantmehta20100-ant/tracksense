@@ -441,5 +441,17 @@ if __name__ == "__main__":
     # Flask's conventional dev port is 5000; honor TRACKSENSE_PORT if set.
     port = int(os.environ.get("TRACKSENSE_PORT", "5000"))
     application = create_app()
-    print(f"TrackSense dashboard: http://{BACKEND_HOST}:{port}/")
+    print(f"TrackSense dashboard: http://localhost:{port}/")
+    # When bound to 0.0.0.0 (all interfaces), other devices on the same Wi-Fi --
+    # e.g. your phone -- can reach it at the PC's LAN address. Print that URL.
+    if BACKEND_HOST in ("0.0.0.0", "::"):
+        import socket
+        try:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            probe.connect(("8.8.8.8", 80))   # no data sent; just resolves the outbound interface
+            lan_ip = probe.getsockname()[0]
+            probe.close()
+            print(f"On your phone (same Wi-Fi): http://{lan_ip}:{port}/")
+        except OSError:
+            print("(could not determine your LAN IP; run `ipconfig` and use the IPv4 address)")
     application.run(host=BACKEND_HOST, port=port, threaded=True, debug=False)
