@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>TrackSense — Phone Camera</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+  <style>
+    .ph-wrap { max-width: 720px; }
+    .ph-stage { position: relative; background: #000; border: 1px solid var(--rule);
+      border-radius: 12px; overflow: hidden; min-height: 240px; display: flex; }
+    .ph-stage canvas { width: 100%; display: block; }
+    .ph-actions { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+    .ph-actions .btn { flex: 1 1 40%; text-align: center; padding: 12px; }
+    .ph-msg { padding: 22px 16px; color: var(--muted); font-size: 14px; }
+    .ph-msg.err { color: var(--high-ink); }
+    .ph-stat { font-size: 12px; color: var(--muted); margin: 4px 0 12px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .contam-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+    .contam-chip { padding: 4px 10px; border-radius: 2px; font-size: 12px; font-weight: 600;
+      background: var(--high-bg); color: var(--high-ink); border: 1px solid var(--high-line);
+      font-family: ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+      text-transform: uppercase; letter-spacing: .04em; }
+    .contam-chip.source { background: var(--med-bg); color: var(--med-ink); border-color: var(--med-line); }
+    .contam-chip.clean  { background: var(--low-bg); color: var(--low-ink); border-color: var(--low-line); }
+    .contam-feed { display: flex; flex-direction: column; gap: 8px; }
+    .contam-note { padding: 10px 13px; border-radius: 3px; font-size: 13px; color: var(--ink-2);
+      background: var(--high-bg); border: 1px solid var(--high-line); border-left: 3px solid var(--high-ink);
+      animation: contam-in .35s ease both; }
+    .contam-note b { color: var(--high-ink); }
+    .contam-note.allergen { background: var(--med-bg); border-color: var(--med-line); border-left-color: var(--med-ink); }
+    .contam-note.allergen b { color: var(--med-ink); }
+    .contam-empty { color: var(--muted); }
+    @keyframes contam-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .contam-note { animation: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap ph-wrap">
+    <header class="hero panel">
+      <div class="hero-top">
+        <div>
+          <h1 class="brand">TrackSense</h1>
+          <p class="tagline">Phone camera &times; contamination tracking</p>
+        </div>
+        <span class="pill pill-running" id="fps-pill">idle</span>
+      </div>
+      <p class="lede">Your phone's camera is the input. Frames are sent to the PC, which runs the
+        8-class YOLO detector + contamination tracker, and the results are drawn below.</p>
+    </header>
+
+    <div class="ph-actions">
+      <button class="btn btn-primary" id="start">Start camera</button>
+      <button class="btn" id="flip" disabled>Flip camera</button>
+      <button class="btn" id="reset" disabled>Reset contamination</button>
+      <a class="btn" href="/">&larr; Dashboard</a>
+    </div>
+
+    <section class="panel">
+      <div class="ph-stage">
+        <canvas id="view" width="640" height="480"></canvas>
+        <div class="ph-msg" id="msg">Tap <strong>Start camera</strong> and allow camera access.</div>
+      </div>
+      <div class="ph-stat" id="stat"></div>
+    </section>
+
+    <section class="panel" id="contam-panel">
+      <div class="sectitle">Contamination monitor</div>
+      <p class="muted small" id="contam-status">Not started.</p>
+      <div class="contam-chips" id="contam-chips"></div>
+      <div class="contam-feed" id="contam-feed">
+        <div class="contam-empty small">Point the camera at the peanut butter to detect the allergen.
+          Touch an item to it to flag it infected; anything an infected item touches is infected too.</div>
+      </div>
+    </section>
+
+    <section class="panel verify">
+      <div class="sectitle">Verification &amp; Limitations</div>
+      <div class="verify-flag"><span class="badge b-verify">physical_verification: false</span></div>
+      <ul class="limitations">
+        <li>Prototype relative-risk estimate. Not a biochemical allergen measurement.</li>
+        <li>Object detection only — a detected object is a proxy for possible contact.</li>
+        <li>Contact = bounding-box overlap, a proxy for real physical contact.</li>
+      </ul>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      var view = document.getElementById("view");
+      var vctx = view.getContext("2d");
+      var msg = document.getElementById("msg");
+      var stat = document.getElementById("stat");
+      var fpsPill = document.getElementById("fps-pill");
+      var startBtn = document.getElementById("start");
+      var flipBtn = document.getElementById("flip");
+      var resetBtn = document.getElementById("reset");
+
+      var video = document.createElement("video");
+      video.setAttribute("playsinline", "");
+      video.muted = true;
+
+      var cap = document.createElement("canvas");   // small offscreen frame we upload
+      var cctx = cap.getContext("2d");
+      var CAP_W = 480;
+
+      var stream = null, running = false, busy = false, facing = "environment";
+      var lastCount = -1, frames = 0, lastFpsT = 0;
+      var INTRO = document.getElementById("contam-feed").innerHTML;
+
+      function showMsg(text, isErr) {
+        msg.innerHTML = text; msg.hidden = false;
+        msg.className = "ph-msg" + (isErr ? " err" : "");
+        view.style.display = "none";
+      }
+      function hideMsg() { msg.hidden = true; view.style.display = "block"; }
+
+      async function start() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showMsg("Camera unavailable. Phone browsers only allow the camera over <strong>HTTPS</strong> — " +
+            "open this page as <strong>https://…:5000/phone</strong> (accept the certificate warning).", true);
+          return;
+        }
+        stopStream();
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: facing }, width: { ideal: 1280 } }, audio: false });
+        } catch (e) {
+          showMsg("Could not open the camera: " + e.message + "<br>Make sure you allowed camera access.", true);
+          return;
+        }
+        video.srcObject = stream;
+        await video.play();
+        hideMsg();
+        var vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+        view.width = vw; view.height = vh;
+        cap.width = CAP_W; cap.height = Math.round(CAP_W * vh / vw);
+        running = true;
+        startBtn.textContent = "Stop camera";
+        flipBtn.disabled = false; resetBtn.disabled = false;
+        loop();
+      }
+
+      function stopStream() {
+        if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+      }
+      function stop() {
+        running = false; stopStream();
+        startBtn.textContent = "Start camera";
+        flipBtn.disabled = true; fpsPill.textContent = "idle";
+      }
+
+      async function loop() {
+        if (!running) return;
+        if (!busy) {
+          busy = true;
+          cctx.drawImage(video, 0, 0, cap.width, cap.height);
+          cap.toBlob(async function (blob) {
+            try {
+              var res = await fetch("/api/phone/analyze", { method: "POST", body: blob,
+                headers: { "Content-Type": "application/octet-stream" } });
+              var data = await res.json();
+              draw(data);
+              updateContam(data);
+              frames++;
+              var now = performance.now();
+              if (now - lastFpsT > 1000) {
+                fpsPill.textContent = frames + " fps"; frames = 0; lastFpsT = now;
+              }
+            } catch (e) { /* transient; keep going */ }
+            busy = false;
+          }, "image/jpeg", 0.6);
+        }
+        requestAnimationFrame(loop);
+      }
+
+      function colorFor(status) {
+        if (status === "source") return "#e08a00";      // amber
+        if (status === "infected") return "#d23b2c";     // red
+        return "#2f9e44";                                 // green (clean)
+      }
+
+      function draw(data) {
+        // draw current video frame, then boxes scaled from capture-space to view-space
+        vctx.drawImage(video, 0, 0, view.width, view.height);
+        var sx = view.width / (data.image_size ? data.image_size[0] : CAP_W);
+        var sy = view.height / (data.image_size ? data.image_size[1] : cap.height);
+        (data.detections || []).forEach(function (d) {
+          var b = d.bbox, x = b[0] * sx, y = b[1] * sy, w = (b[2] - b[0]) * sx, h = (b[3] - b[1]) * sy;
+          var c = colorFor(d.status);
+          vctx.lineWidth = Math.max(2, view.width / 220);
+          vctx.strokeStyle = c;
+          vctx.strokeRect(x, y, w, h);
+          var tag = d.status === "source" ? "PEANUT" : (d.status === "infected" ? "INFECTED" : d.class);
+          vctx.font = "600 " + Math.max(13, view.width / 34) + "px system-ui, sans-serif";
+          var tw = vctx.measureText(tag).width + 10;
+          vctx.fillStyle = c;
+          vctx.fillRect(x, Math.max(0, y - 22), tw, 22);
+          vctx.fillStyle = "#fff";
+          vctx.fillText(tag, x + 5, Math.max(15, y - 6));
+        });
+        stat.textContent = (data.detections ? data.detections.length : 0) + " objects  •  " +
+          (data.infected && data.infected.length ? data.infected.length + " infected" : "clean");
+      }
+
+      // ---- contamination panel (same shape as the PC camera page) ----
+      var statusEl = document.getElementById("contam-status");
+      var chipsEl = document.getElementById("contam-chips");
+      var feedEl = document.getElementById("contam-feed");
+      function addChip(text, cls) {
+        var c = document.createElement("span");
+        c.className = "contam-chip" + (cls ? " " + cls : "");
+        c.textContent = text; chipsEl.appendChild(c);
+      }
+      function updateContam(state) {
+        var infected = state.infected || [], seen = state.sources_seen || [];
+        statusEl.textContent = infected.length
+          ? (infected.length + " item" + (infected.length > 1 ? "s" : "") + " contaminated")
+          : (seen.length ? "Peanut butter detected — no cross-contact yet" : "Monitoring… nothing contaminated");
+        chipsEl.innerHTML = "";
+        seen.forEach(function (s) { addChip("source: " + s, "source"); });
+        infected.forEach(function (it) { addChip(it, ""); });
+        if (!seen.length && !infected.length) addChip("clean", "clean");
+        var notes = state.notifications || [];
+        if (notes.length === lastCount) return;
+        lastCount = notes.length;
+        if (!notes.length) { feedEl.innerHTML = INTRO; return; }
+        feedEl.innerHTML = "";
+        notes.slice().reverse().forEach(function (n) {
+          var d = document.createElement("div");
+          if (n.kind === "allergen") {
+            d.className = "contam-note allergen";
+            d.innerHTML = "<b>⚠ ALLERGEN DETECTED</b> &mdash; " + (n.message || "");
+          } else {
+            d.className = "contam-note";
+            d.innerHTML = "<b>⚠ " + String(n.item).toUpperCase() + " INFECTED</b> &mdash; " + (n.message || "");
+          }
+          feedEl.appendChild(d);
+        });
+      }
+
+      startBtn.onclick = function () { running ? stop() : start(); };
+      flipBtn.onclick = function () { facing = (facing === "environment") ? "user" : "environment"; if (running) start(); };
+      resetBtn.onclick = function () {
+        fetch("/api/phone/reset", { method: "POST" }).catch(function () {});
+        lastCount = -1; chipsEl.innerHTML = ""; feedEl.innerHTML = INTRO; statusEl.textContent = "Reset — monitoring…";
+      };
+    })();
+  </script>
+</body>
+</html>

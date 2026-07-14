@@ -39,6 +39,9 @@ reports/
 AllergenDetection/
 tracksensegithub/
 
+# Self-signed dev HTTPS cert + private key (generated locally; NEVER commit keys).
+.certs/
+
 # Local tooling / editor / agent config.
 .claude/
 .vscode/

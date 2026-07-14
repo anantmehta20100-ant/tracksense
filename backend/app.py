@@ -157,6 +157,59 @@ def _shared_frame_stream(live_service):
         time.sleep(0.06)
 
 
+def _ensure_camera_model(app):
+    """Load + schema-validate the 8-class YOLO detector once, cache it on the app.
+    Shared by the visual /camera stream and the /phone frame analyzer."""
+    model = app.config.get("CAMERA_MODEL")
+    if model is None:
+        from ultralytics import YOLO  # lazy heavy import
+        from vision.yolo_detection_source import validate_class_names
+        model = YOLO(CAMERA_MODEL_PATH)
+        validate_class_names(model.names)   # reject the old / wrong-schema checkpoint
+        app.config["CAMERA_MODEL"] = model
+    return model
+
+
+def _detect_lan_ip():
+    """Best-effort LAN IPv4 of this machine (the address a phone would use)."""
+    import socket
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))   # no data sent; just resolves the outbound interface
+        ip = probe.getsockname()[0]
+        probe.close()
+        return ip
+    except OSError:
+        return None
+
+
+def _serve(app, host, port, *, use_https=False, lan_ip=None):
+    """Serve `app`. Prefer cheroot -- a real multithreaded WSGI server that keeps
+    per-request latency ~tens of ms (the Flask/Werkzeug dev server adds ~2s per
+    request here, which makes the /phone frame loop unusable). cheroot also
+    terminates TLS, which /phone needs (getUserMedia requires HTTPS). Falls back
+    to the Flask dev server if cheroot isn't installed."""
+    ssl_pair = None
+    if use_https:
+        from backend.dev_cert import ensure_cert
+        ssl_pair = ensure_cert(extra_hosts=[lan_ip] if lan_ip else None)  # (cert, key)
+    try:
+        from cheroot.wsgi import PathInfoDispatcher, Server
+    except ImportError:
+        # Fallback: slower dev server (fine for localhost-only, laggy for /phone).
+        app.run(host=host, port=port, threaded=True, debug=False,
+                ssl_context=ssl_pair)
+        return
+    server = Server((host, port), PathInfoDispatcher({"/": app}), numthreads=8)
+    if ssl_pair is not None:
+        from cheroot.ssl.builtin import BuiltinSSLAdapter
+        server.ssl_adapter = BuiltinSSLAdapter(ssl_pair[0], ssl_pair[1])
+    try:
+        server.start()
+    except KeyboardInterrupt:
+        server.stop()
+
+
 class DemoRunner:
     """Thread-safe wrapper around a single DemoController."""
 
@@ -398,13 +451,7 @@ def create_app(model_path=None) -> Flask:
                             mimetype="multipart/x-mixed-replace; boundary=frame")
         # Otherwise open a standalone capture. Load + schema-validate the detector once.
         try:
-            model = app.config.get("CAMERA_MODEL")
-            if model is None:
-                from ultralytics import YOLO  # lazy heavy import
-                from vision.yolo_detection_source import validate_class_names
-                model = YOLO(CAMERA_MODEL_PATH)
-                validate_class_names(model.names)   # reject the old / wrong-schema checkpoint
-                app.config["CAMERA_MODEL"] = model
+            model = _ensure_camera_model(app)
         except Exception as exc:  # noqa: BLE001 - surface load/schema errors to the client
             return jsonify({"error": "camera model load failed: " + str(exc)}), 500
         # One camera user at a time (single physical camera handle).
@@ -434,24 +481,92 @@ def create_app(model_path=None) -> Flask:
                             "sources_seen": [], "count": 0})
         return jsonify({"active": True, **contamination.state()})
 
+    # -- phone camera input (phone captures frames -> PC runs YOLO + contamination) --
+    @app.route("/phone")
+    def phone_page():
+        return render_template("phone.html")
+
+    @app.route("/api/phone/analyze", methods=["POST"])
+    def phone_analyze():
+        """Receive one JPEG frame from the phone, run the 8-class detector +
+        contamination tracker, and return detections (with per-object status) plus
+        the current contamination state. YOLO stays on the PC; the phone only
+        captures + draws."""
+        import cv2
+        import numpy as np
+
+        from pipeline.contamination import ContaminationTracker
+        from pipeline.live_yolo_runner import _overlapping_pairs
+
+        raw = request.get_data()
+        if not raw:
+            return jsonify({"error": "empty body (expected a JPEG frame)"}), 400
+        frame = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            return jsonify({"error": "could not decode image"}), 400
+        try:
+            model = _ensure_camera_model(app)
+        except Exception as exc:  # noqa: BLE001 - surface model/schema errors to the phone
+            return jsonify({"error": "model load failed: " + str(exc)}), 500
+
+        # Smaller inference size = much faster on CPU; objects held near the phone
+        # stay large enough to detect. Tunable via TRACKSENSE_PHONE_IMGSZ.
+        imgsz = int(os.environ.get("TRACKSENSE_PHONE_IMGSZ", "384"))
+        result = model(frame, verbose=False, imgsz=imgsz)[0]
+        pairs, meta = _overlapping_pairs(result)     # meta: [(x1,y1,x2,y2,class), ...]
+
+        contam = app.config.get("PHONE_CONTAM")
+        if contam is None:
+            contam = ContaminationTracker()
+            app.config["PHONE_CONTAM"] = contam
+        contam.observe(pairs, frame_index=contam.frame_index + 1,
+                       present_classes=[m[4] for m in meta])
+
+        boxes = getattr(result, "boxes", None)
+        confs = [float(b.conf[0]) for b in boxes] if boxes is not None else []
+        h, w = frame.shape[:2]
+        detections = [{
+            "class": cls,
+            "conf": round(confs[i], 3) if i < len(confs) else None,
+            "bbox": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
+            "status": contam.status(cls),
+        } for i, (x1, y1, x2, y2, cls) in enumerate(meta)]
+        return jsonify({"image_size": [w, h], "detections": detections, **contam.state()})
+
+    @app.route("/api/phone/reset", methods=["POST"])
+    def phone_reset():
+        from pipeline.contamination import ContaminationTracker
+        app.config["PHONE_CONTAM"] = ContaminationTracker()
+        return jsonify({"ok": True})
+
     return app
 
 
 if __name__ == "__main__":
+    # Line-buffer stdout so the launcher window shows the URLs immediately.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
     # Flask's conventional dev port is 5000; honor TRACKSENSE_PORT if set.
     port = int(os.environ.get("TRACKSENSE_PORT", "5000"))
     application = create_app()
-    print(f"TrackSense dashboard: http://localhost:{port}/")
+
+    # HTTPS is required for the phone-camera page (/phone): browsers only expose
+    # getUserMedia on a secure context. TRACKSENSE_HTTPS=1 serves with a cached
+    # self-signed cert (accept the browser warning once).
+    use_https = os.environ.get("TRACKSENSE_HTTPS") == "1"
+    scheme = "https" if use_https else "http"
+    lan_ip = _detect_lan_ip()
+
+    print(f"TrackSense dashboard: {scheme}://localhost:{port}/")
     # When bound to 0.0.0.0 (all interfaces), other devices on the same Wi-Fi --
     # e.g. your phone -- can reach it at the PC's LAN address. Print that URL.
     if BACKEND_HOST in ("0.0.0.0", "::"):
-        import socket
-        try:
-            probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            probe.connect(("8.8.8.8", 80))   # no data sent; just resolves the outbound interface
-            lan_ip = probe.getsockname()[0]
-            probe.close()
-            print(f"On your phone (same Wi-Fi): http://{lan_ip}:{port}/")
-        except OSError:
+        if lan_ip:
+            print(f"On your phone (same Wi-Fi):  {scheme}://{lan_ip}:{port}/")
+            if use_https:
+                print(f"Phone camera input:         {scheme}://{lan_ip}:{port}/phone")
+        else:
             print("(could not determine your LAN IP; run `ipconfig` and use the IPv4 address)")
-    application.run(host=BACKEND_HOST, port=port, threaded=True, debug=False)
+    _serve(application, BACKEND_HOST, port, use_https=use_https, lan_ip=lan_ip)
