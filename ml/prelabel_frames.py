@@ -6,6 +6,8 @@ Writes next to the images folder:
   <dir>/labels/<frame>.txt   one YOLO box per detection (model-local class ids)
   <dir>/classes.txt          class names in id order (labelImg / X-AnyLabeling)
   <dir>/data.yaml            names + val path (Roboflow upload, ml eval scripts)
+  <dir>/drafts.json          fingerprint of each draft, so ml/build_owncam_dataset.py
+                             can warn about label files nobody has edited
 
 Every draft box must be checked by a person before the frames are used as a
 test set: a model graded on its own unchecked guesses scores itself perfect.
@@ -16,6 +18,8 @@ corrections survive a re-run.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -62,6 +66,8 @@ def main() -> None:
     print(f"{len(images)} images, weights {args.weights}, device {device}, conf {args.conf}")
     print(f"classes: {names}")
 
+    drafts_file = root / "drafts.json"
+    drafts = json.loads(drafts_file.read_text()) if drafts_file.is_file() else {}
     written = skipped = boxes = 0
     for image in images:
         label = labels_dir / f"{image.stem}.txt"
@@ -72,8 +78,10 @@ def main() -> None:
         lines = [f"{int(c)} {x:.6f} {y:.6f} {w:.6f} {h:.6f}"
                  for c, (x, y, w, h) in zip(result.boxes.cls.tolist(), result.boxes.xywhn.tolist())]
         label.write_text("\n".join(lines) + ("\n" if lines else ""))
+        drafts[image.stem] = hashlib.sha1(label.read_bytes()).hexdigest()
         written, boxes = written + 1, boxes + len(lines)
 
+    drafts_file.write_text(json.dumps(drafts, indent=0))
     (root / "classes.txt").write_text("\n".join(names[i] for i in sorted(names)) + "\n")
     (root / "data.yaml").write_text(yaml.safe_dump(
         {"path": root.as_posix(), "train": "images", "val": "images", "names": names}, sort_keys=False))

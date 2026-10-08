@@ -221,22 +221,36 @@ def smoke_check(yaml_path: Path) -> None:
     print("Dataset loads; schema matches the 8-class training schema.")
 
 
+def keep_awake(on: bool) -> None:
+    """Stop Windows sleeping while this process trains (lid-close action still applies)."""
+    if platform.system() != "Windows":
+        return
+    import ctypes
+    es_continuous, es_system_required = 0x80000000, 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | (es_system_required if on else 0))
+
+
 def train(yaml_path: Path, args) -> None:
     from ultralytics import YOLO
-    print(f"Training: model={args.model} epochs={args.epochs} imgsz={args.imgsz} "
-          f"batch={args.batch} device={args.device} workers={args.workers} seed={args.seed}")
-    YOLO(args.model).train(
-        data=str(yaml_path),
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        device=args.device,
-        workers=args.workers,
-        seed=args.seed,
-        project=args.project,
-        name=args.name,
-        exist_ok=True,
-    )
+    print(f"Training: model={args.model} epochs={args.epochs} imgsz={args.imgsz} batch={args.batch} "
+          f"device={args.device} workers={args.workers} seed={args.seed} patience={args.patience}")
+    keep_awake(True)
+    try:
+        YOLO(args.model).train(
+            data=str(yaml_path),
+            epochs=args.epochs,
+            imgsz=args.imgsz,
+            batch=args.batch,
+            device=args.device,
+            workers=args.workers,
+            seed=args.seed,
+            patience=args.patience,
+            project=args.project,
+            name=args.name,
+            exist_ok=True,
+        )
+    finally:
+        keep_awake(False)
 
 
 def parse_args() -> argparse.Namespace:
@@ -248,6 +262,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto", help="auto = first CUDA GPU if visible, else cpu")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--patience", type=int, default=20, help="stop after N epochs without val improvement")
     parser.add_argument("--data", default=None, help="Explicit data yaml; default auto-generates from --dataset-root.")
     parser.add_argument("--dataset-root", default=str(DEFAULT_DATASET_ROOT))
     parser.add_argument("--name", default="tracksense_8class")

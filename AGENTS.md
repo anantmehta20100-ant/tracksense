@@ -102,7 +102,7 @@ For risk model:
 
 Train/test splits for temporal risk sequences must be by `scenario_id` or `sequence_id`, never by individual rows.
 
-Current measured results: **YOLO** — precision 89.4%, recall 91.8%, mAP50 94.6%, mAP50-95 80.1%. **Random Forest** (synthetic-development) — accuracy 82%, macro-F1 0.72, AUC 0.94; beats majority, direct-rule, and logistic-regression baselines.
+Current measured results: **YOLO** — precision 89.4%, recall 91.8%, mAP50 94.6%, mAP50-95 80.1% (older `tracksense_8class_best.pt`). The live default `tracksense_8class_multiscene_best.pt` is an epoch-4-of-50 snapshot: mAP50 81.2%, mAP50-95 58.1% on its own val split. Neither is measured on our camera yet; see `docs/DETECTION_PLAYBOOK.md`. **Random Forest** (synthetic-development) — accuracy 82%, macro-F1 0.72, AUC 0.94; beats majority, direct-rule, and logistic-regression baselines.
 
 ---
 
@@ -226,7 +226,7 @@ Food:                          bread
 
 Runtime code consuming model output must map model-local ids back to canonical ids via `ml/class_schema.model_to_canonical()` before touching `config/allergens.py`. Do not accidentally load an old single-class `best.pt` — the YOLO adapter (`vision/yolo_detection_source.py`) validates class names on load and rejects a mismatched schema.
 
-**Trained YOLO validation (8-class):** precision 89.4%, recall 91.8%, mAP50 94.6%, mAP50-95 80.1%.
+**Trained YOLO validation (8-class, older `tracksense_8class_best.pt`):** precision 89.4%, recall 91.8%, mAP50 94.6%, mAP50-95 80.1%. The live multiscene checkpoint is an unfinished epoch-4 snapshot (mAP50 81.2%).
 
 **Cutlery is single-class** (the Roboflow dataset had no knife/fork/spoon split — 9,038 instances, one class id). Collapsed into one `cutlery` class; fine, because risk propagation depends on detecting *that* a contact occurred, not the utensil type.
 
@@ -326,7 +326,7 @@ tracksense/
 
 **Current risk model (Random Forest):** accuracy, balanced accuracy, macro-F1, confusion matrix; ranking exposed objects above unaffected ones; per-scenario-group temporal behaviour. Compared against majority / direct-contact-rule / logistic-regression baselines on held-out scenarios (`evaluate/evaluate_random_forest.py`, `reports/risk_model_*`). Benchmark: accuracy 82%, macro-F1 0.72, AUC 0.94.
 
-**YOLO detector:** mAP50, mAP50-95, per-class precision/recall, live detection stability. Current: P 89.4%, R 91.8%, mAP50 94.6%, mAP50-95 80.1%.
+**YOLO detector:** mAP50, mAP50-95, per-class precision/recall, live detection stability. Older `tracksense_8class_best.pt`: P 89.4%, R 91.8%, mAP50 94.6%, mAP50-95 80.1%. Live multiscene checkpoint (epoch-4 snapshot): mAP50 81.2%, mAP50-95 58.1%. Real-camera scores: `evaluate/evaluate_detector.py`.
 
 **Split methodology — by `scenario_id` / `sequence_id`, never by row.** Rows within one scenario are sequentially dependent (features reference `propagation_depth` and history from earlier events in the same chain), so a random row-level split would leak between train and test. Hold out entire scenarios/sequences.
 
