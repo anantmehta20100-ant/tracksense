@@ -47,7 +47,8 @@ from flask import Flask, Response, abort, jsonify, render_template, request, sen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from config.runtime_config import BACKEND_HOST, RF_MODEL_PATH, YOLO_MODEL_PATH, summary  # noqa: E402
+from config.runtime_config import (  # noqa: E402
+    BACKEND_HOST, RF_MODEL_PATH, YOLO_MODEL_PATH, inference_kwargs, summary)
 from pipeline.demo_controller import DemoController  # noqa: E402
 from pipeline.live_risk_service import CAMERA_LOCK, LiveRiskService  # noqa: E402
 
@@ -110,10 +111,9 @@ def _mjpeg_stream(model, camera_index=0, jpeg_quality=70, contamination=None):
     if contamination is None:
         contamination = ContaminationTracker()
 
-    cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)  # DSHOW is the reliable Windows backend
-    if not cap.isOpened():
-        cap.release()
-        cap = cv2.VideoCapture(camera_index)
+    from vision.camera import open_camera
+
+    cap = open_camera(camera_index)
     try:
         misses = 0
         frame_index = 0
@@ -125,7 +125,7 @@ def _mjpeg_stream(model, camera_index=0, jpeg_quality=70, contamination=None):
                     break
                 continue
             misses = 0
-            result = model(frame, verbose=False)[0]
+            result = model(frame, **inference_kwargs())[0]
             inflate_result_boxes(result)  # enlarge drawn boxes a bit
             # boxes + collision cue + sticky contamination tags/notifications
             annotated = draw_contamination_overlay(
@@ -518,7 +518,7 @@ def create_app(model_path=None) -> Flask:
         # Smaller inference size = much faster on CPU; objects held near the phone
         # stay large enough to detect. Tunable via TRACKSENSE_PHONE_IMGSZ.
         imgsz = int(os.environ.get("TRACKSENSE_PHONE_IMGSZ", "384"))
-        result = model(frame, verbose=False, imgsz=imgsz)[0]
+        result = model(frame, **{**inference_kwargs(), "imgsz": imgsz})[0]
         pairs, meta = _overlapping_pairs(result)     # meta: [(x1,y1,x2,y2,class), ...]
 
         contam = app.config.get("PHONE_CONTAM")

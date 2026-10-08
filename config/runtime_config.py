@@ -50,6 +50,40 @@ YOLO_MODEL_PATH = os.environ.get(
 # from ml/class_schema.py so this never drifts from the trained schema.
 EXPECTED_YOLO_CLASS_NAMES = training_names()  # {0: "nut_butter_jar", ..., 7: "bread"}
 
+# ---------------------------------------------------------------------------
+# Camera + detector inference (every live path reads these)
+# ---------------------------------------------------------------------------
+# Requested capture size. Without this OpenCV falls back to the webcam default
+# (often 640x480). Cameras that can't do it silently keep their own size.
+CAMERA_WIDTH = int(os.environ.get("TRACKSENSE_CAMERA_WIDTH", "1280"))
+CAMERA_HEIGHT = int(os.environ.get("TRACKSENSE_CAMERA_HEIGHT", "720"))
+
+# Inference size should match the training imgsz (640); smaller shrinks thin
+# cutlery below what the model learned. Lower it only on a CPU-only machine.
+YOLO_IMGSZ = int(os.environ.get("TRACKSENSE_YOLO_IMGSZ", "640"))
+YOLO_CONF = float(os.environ.get("TRACKSENSE_YOLO_CONF", "0.25"))
+YOLO_IOU = float(os.environ.get("TRACKSENSE_YOLO_IOU", "0.7"))
+
+# "auto" -> first CUDA GPU if torch can see one, else CPU. Or "cpu", "0", "cuda:0".
+YOLO_DEVICE = os.environ.get("TRACKSENSE_YOLO_DEVICE", "auto")
+
+
+def resolve_device(device: str = YOLO_DEVICE) -> str:
+    if device != "auto":
+        return device
+    try:
+        import torch
+        return "0" if torch.cuda.is_available() else "cpu"
+    except Exception:  # noqa: BLE001
+        return "cpu"
+
+
+def inference_kwargs() -> dict:
+    """Keyword args for every live `model(frame, **kwargs)` call."""
+    return {"imgsz": YOLO_IMGSZ, "conf": YOLO_CONF, "iou": YOLO_IOU,
+            "device": resolve_device(), "verbose": False}
+
+
 # RF model path. None -> use ml.train_random_forest.MODEL_PATH default.
 RF_MODEL_PATH = os.environ.get("TRACKSENSE_RF_MODEL", None)
 
@@ -123,6 +157,9 @@ def summary() -> dict:
         "yolo_model_path": YOLO_MODEL_PATH,
         "rf_model_path": RF_MODEL_PATH,
         "expected_yolo_class_names": EXPECTED_YOLO_CLASS_NAMES,
+        "camera": {"width": CAMERA_WIDTH, "height": CAMERA_HEIGHT},
+        "yolo_inference": {"imgsz": YOLO_IMGSZ, "conf": YOLO_CONF, "iou": YOLO_IOU,
+                           "device": YOLO_DEVICE},
         "contact": vars(CONTACT),
         "alert": vars(ALERT),
         "demo": vars(DEMO),

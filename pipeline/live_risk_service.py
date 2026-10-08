@@ -33,6 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from config.runtime_config import inference_kwargs  # noqa: E402
+
 # One arbiter for the single physical camera handle (shared with backend/app.py).
 CAMERA_LOCK = threading.Lock()
 
@@ -43,13 +45,13 @@ class LiveRiskService:
     """Runs (or simulates) a live YOLO -> risk loop in a background thread."""
 
     def __init__(self, *, model_path, rf_model_path=None, camera_index=0,
-                 contact_config=None, imgsz=448, jpeg_quality=70,
+                 contact_config=None, imgsz=None, jpeg_quality=70,
                  capture_factory=None, detect_fn=None, pipeline_factory=None):
         self.model_path = str(model_path)
         self.rf_model_path = rf_model_path
         self.camera_index = int(camera_index)
         self._contact_config = contact_config
-        self._imgsz = int(imgsz)
+        self._imgsz = int(imgsz) if imgsz else None
         self._jpeg_quality = int(jpeg_quality)
 
         # Injectable seams (defaults use the real camera + YOLO):
@@ -187,16 +189,8 @@ class LiveRiskService:
         return snap
 
     def _default_capture(self):
-        import cv2
-        cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)  # reliable Windows backend
-        if not cap.isOpened():
-            cap.release()
-            cap = cv2.VideoCapture(self.camera_index)
-        try:
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # always grab the freshest frame
-        except Exception:  # noqa: BLE001
-            pass
-        return cap
+        from vision.camera import open_camera
+        return open_camera(self.camera_index)
 
     def _default_detect(self, frame, frame_index, timestamp):
         """Real YOLO detection -> (Detection list, annotated jpeg bytes)."""
@@ -204,7 +198,10 @@ class LiveRiskService:
 
         from pipeline.live_yolo_runner import (  # reuse the CLI bridge
             _detections_from_result, draw_contamination_overlay, inflate_result_boxes)
-        result = self._model(frame, verbose=False, imgsz=self._imgsz)[0]
+        kwargs = inference_kwargs()
+        if self._imgsz:
+            kwargs["imgsz"] = self._imgsz
+        result = self._model(frame, **kwargs)[0]
         dets = _detections_from_result(result, self._names, frame_index, timestamp)
         inflate_result_boxes(result)  # visual only: enlarge drawn boxes (dets already extracted)
         annotated = draw_contamination_overlay(  # touching boxes + sticky contamination tags

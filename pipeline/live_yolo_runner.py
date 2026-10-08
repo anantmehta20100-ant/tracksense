@@ -247,18 +247,19 @@ def _preview_loop(source, *, camera, video, frames, record, expect_pair, imgsz=N
     `imgsz` so the window stays responsive."""
     import cv2
 
+    from vision.camera import describe, open_camera
     from vision.mock_detection_source import FrameData
 
     src = video if video is not None else (0 if camera is None else camera)
-    cap = cv2.VideoCapture(src)
+    cap = open_camera(src)
     if not cap.isOpened():
         print(f"PREVIEW: could not open source {src!r}.")
         return
-    try:
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)   # drop stale buffered frames -> less lag
-    except Exception:
-        pass
-    infer_imgsz = int(imgsz) if imgsz else 448   # smaller = faster inference = smoother preview
+    print(f"PREVIEW source {src!r}: {describe(cap)}")
+    infer = dict(source.infer)
+    if imgsz:
+        infer["imgsz"] = int(imgsz)
+    infer_imgsz = infer["imgsz"]
     window = "TrackSense first-link  (press q to quit)"
     cap_frames = frames if frames and frames > 0 else 100000
     frame_index = 0
@@ -270,7 +271,7 @@ def _preview_loop(source, *, camera, video, frames, record, expect_pair, imgsz=N
             ok, frame = cap.read()
             if not ok:
                 break
-            result = source.model(frame, verbose=False, imgsz=infer_imgsz)[0]
+            result = source.model(frame, **infer)[0]
             dets = _detections_from_result(result, source.names, frame_index, frame_index / 30.0)
             fd = FrameData(frame_index=frame_index, timestamp=frame_index / 30.0,
                            detections=dets, control_events=[])
@@ -326,7 +327,7 @@ def run(*, model_path: str = None, camera: int = None, video: str = None, image:
         input_kind = f"camera:{cam}"
 
     if conf is not None:
-        source.model.overrides["conf"] = float(conf)   # lower detector floor for live capture
+        source.infer["conf"] = float(conf)   # lower detector floor for live capture
 
     contact_config = CONTACT if persistence is None else replace(
         CONTACT, start_persistence_frames=int(persistence),

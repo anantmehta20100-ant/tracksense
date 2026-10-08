@@ -28,7 +28,7 @@ from typing import Dict
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from config.allergens import OBJECT_CLASS_TO_ID  # noqa: E402
-from config.runtime_config import EXPECTED_YOLO_CLASS_NAMES, YOLO_MODEL_PATH  # noqa: E402
+from config.runtime_config import EXPECTED_YOLO_CLASS_NAMES, YOLO_MODEL_PATH, inference_kwargs  # noqa: E402
 from pipeline.contracts import Detection  # noqa: E402
 from vision.mock_detection_source import FrameData  # reuse the frame container  # noqa: E402
 
@@ -72,6 +72,7 @@ class YoloDetectionSource:
         self.fps = float(fps)
         self.camera_index = camera_index
         self.video_path = video_path
+        self.infer = inference_kwargs()
         self.names = self._load()
 
     @property
@@ -94,7 +95,7 @@ class YoloDetectionSource:
 
     def detect(self, frame, frame_index: int = 0, timestamp: float = 0.0):
         """Run the detector on one BGR frame -> list[Detection] (canonical classes)."""
-        results = self.model(frame, verbose=False)[0]
+        results = self.model(frame, **self.infer)[0]
         detections = []
         for box in results.boxes:
             local_id = int(box.cls[0])
@@ -113,8 +114,10 @@ class YoloDetectionSource:
         allergen 'sources' come from detected classes, not a scripted answer key."""
         import cv2  # lazy import; only needed for a real capture
 
+        from vision.camera import open_camera
+
         source = self.video_path if self.video_path is not None else self.camera_index
-        capture = cv2.VideoCapture(source)
+        capture = open_camera(source)
         frame_index = 0
         try:
             while True:

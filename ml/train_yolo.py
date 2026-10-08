@@ -30,6 +30,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+from config.runtime_config import resolve_device
 from ml.class_schema import (
     CANONICAL_TO_MODEL_LOCAL,
     EXCLUDED_FROM_TRAINING,
@@ -244,7 +245,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=0, help="0 = no training.")
     parser.add_argument("--batch", type=int, default=16)
     parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default="auto", help="auto = first CUDA GPU if visible, else cpu")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--data", default=None, help="Explicit data yaml; default auto-generates from --dataset-root.")
@@ -277,14 +278,11 @@ def main() -> None:
     if args.epochs > 0:
         if not args.model:
             raise SystemExit(f"--model is REQUIRED for training (no silent default). Recommended: {RECOMMENDED_MODEL}")
-        try:
-            import torch
-            cuda = torch.cuda.is_available()
-        except Exception:
-            cuda = False
-        if not cuda and args.device == "cpu" and not args.force_cpu_train:
+        args.device = resolve_device(args.device)
+        if args.device == "cpu" and not args.force_cpu_train:
             raise SystemExit(
-                "No CUDA GPU and device=cpu: a multi-epoch run on CPU is impractical.\n"
+                "Training would run on the CPU (no CUDA GPU visible to torch, or --device cpu).\n"
+                "Check: python -c \"import torch; print(torch.cuda.is_available())\" must print True.\n"
                 "Use --smoke locally and train on Colab T4, or pass --force-cpu-train to override."
             )
         train(yaml_path, args)
