@@ -5,6 +5,7 @@ than any downloaded dataset: they become the honest test set, and later the
 best training data.
 
     python ml/capture_frames.py --camera 0 --out data/own_frames/session1
+    python ml/capture_frames.py --out data/own_frames/test1 --auto --duration 600
 
 Keys in the preview window:
   space  save this frame now
@@ -42,6 +43,8 @@ def main() -> None:
     parser.add_argument("--min-change", type=float, default=6.0,
                         help="auto-capture skips frames whose mean grey-level change vs the last save is below this")
     parser.add_argument("--max", type=int, default=1000)
+    parser.add_argument("--auto", action="store_true", help="start with auto-capture on")
+    parser.add_argument("--duration", type=float, default=0, help="stop after this many seconds (0 = until q)")
     args = parser.parse_args()
 
     out = Path(args.out)
@@ -51,9 +54,10 @@ def main() -> None:
         raise SystemExit(f"could not open camera {args.camera}")
     print(f"camera {args.camera}: {describe(cap)} -> saving to {out.resolve()}")
 
-    auto, saved, last_save, last_thumb = False, len(list(out.glob("*.jpg"))), 0.0, None
+    auto, saved, last_save, last_thumb = args.auto, len(list(out.glob("*.jpg"))), 0.0, None
+    deadline = time.time() + args.duration if args.duration > 0 else float("inf")
     window = "capture  [space] save  [a] auto  [q] quit"
-    while saved < args.max:
+    while saved < args.max and time.time() < deadline:
         ok, frame = cap.read()
         if not ok or frame is None:
             continue

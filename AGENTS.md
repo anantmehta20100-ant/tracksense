@@ -36,11 +36,11 @@ The current YOLO detector is an 8-class model trained as:
 
 `counter` is not part of the current trained detector and must not be assumed available.
 
-Final YOLO checkpoint:
+Live YOLO checkpoint (the app's default, `config/runtime_config.py`):
 
-model/checkpoints/tracksense_8class_best.pt
+model/checkpoints/tracksense_8class_multiscene_best.pt
 
-Do not accidentally load any old single-class `best.pt`.
+This is an unfinished epoch-4-of-50 snapshot; finishing and improving it is the current priority. Do not accidentally load any old single-class `best.pt`.
 
 The Random Forest risk model is a downstream model. It does not detect objects. It predicts relative cross-contact risk from engineered contact-event features and object history.
 
@@ -48,7 +48,7 @@ Risk predictions are prototype relative-risk estimates, not biochemical contamin
 
 ## Current Priority
 
-Do not retrain YOLO.
+**Detection first.** Make the 8-class detector reliable on our own camera before anything else, following `docs/DETECTION_PLAYBOOK.md`: real-camera test set → finish the interrupted training run → fine-tune on our own camera frames. Keep the 8-class schema; do not switch to a fork/knife/spoon split.
 Do not add Ego4D.
 Do not improve the Random Forest unless there is a blocking bug.
 Do not return to the GRU as the main architecture.
